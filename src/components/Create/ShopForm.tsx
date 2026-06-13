@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { slugify } from "../../lib/slugify";
 import { uploadImage } from "../../lib/storage";
-import { proposeCategory, proposeCluster } from "../../lib/db";
+import { proposeCategory, proposeCluster, isSlugAvailable } from "../../lib/db";
 import ImageUpload from "../UI/ImageUpload";
 import Input from "../UI/Input";
 import Select from "../UI/Select";
@@ -72,6 +72,7 @@ const ShopForm: React.FC<ShopFormProps> = ({
 
   const [formData, setFormData] = useState<any>({
     name: "",
+    slug: "",
     category: "",
     city: "",
     state: "",
@@ -97,6 +98,9 @@ const ShopForm: React.FC<ShopFormProps> = ({
     lat: null,
     lng: null,
   });
+
+  const [isSlugCustom, setIsSlugCustom] = useState(false);
+  const [slugStatus, setSlugStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
   const STORAGE_KEY = "shop_form_draft";
 
@@ -135,11 +139,39 @@ const ShopForm: React.FC<ShopFormProps> = ({
         if (draft.clusterType === "CUSTOM") setShowCustomCluster(true);
         if (draft.logo) setLogoPreview(draft.logo);
         if (draft.coverImage) setCoverPreview(draft.coverImage);
+        if (draft.slug) setIsSlugCustom(true);
       } catch (e) {
         console.error("Failed to parse draft", e);
       }
     }
   }, []);
+
+  // Debounced slug availability check
+  useEffect(() => {
+    if (!formData.slug || formData.slug.trim() === "") {
+      setSlugStatus("idle");
+      return;
+    }
+
+    const cleanSlug = formData.slug.trim().toLowerCase();
+    if (!/^[a-z0-9-]+$/.test(cleanSlug)) {
+      setSlugStatus("invalid");
+      return;
+    }
+
+    setSlugStatus("checking");
+
+    const timer = setTimeout(async () => {
+      const isAvailable = await isSlugAvailable(cleanSlug, null);
+      if (isAvailable) {
+        setSlugStatus("available");
+      } else {
+        setSlugStatus("taken");
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [formData.slug]);
 
   // Save draft on state change
   const updateDraft = (newData: any) => {
@@ -251,6 +283,20 @@ const ShopForm: React.FC<ShopFormProps> = ({
     }
     if (name === "clusterType") {
       setShowCustomCluster(value === "CUSTOM");
+    }
+
+    if (name === "name") {
+      const cleanName = value;
+      const newSlug = !isSlugCustom ? slugify(cleanName) : formData.slug;
+      updateDraft({ name: cleanName, slug: newSlug });
+      return;
+    }
+
+    if (name === "slug") {
+      const cleanSlug = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+      setIsSlugCustom(cleanSlug !== "");
+      updateDraft({ slug: cleanSlug });
+      return;
     }
 
     updateDraft({ [name]: value });
@@ -435,6 +481,22 @@ const ShopForm: React.FC<ShopFormProps> = ({
         setLocalError("Please enter your proposed market category.");
         return;
       }
+      if (!formData.slug || formData.slug.trim() === "") {
+        setLocalError("Shop URL slug is required.");
+        return;
+      }
+      if (slugStatus === "taken") {
+        setLocalError("This shop URL is already taken. Please choose another one.");
+        return;
+      }
+      if (slugStatus === "invalid") {
+        setLocalError("Invalid URL slug. Only lowercase letters, numbers, and hyphens are allowed.");
+        return;
+      }
+      if (slugStatus === "checking") {
+        setLocalError("Checking URL availability... Please wait.");
+        return;
+      }
     }
     if (currentStep === 2) {
       if (!formData.city || !formData.phone || !formData.ownerEmail) {
@@ -471,11 +533,20 @@ const ShopForm: React.FC<ShopFormProps> = ({
       return;
     }
 
+    if (slugStatus === "taken") {
+      setLocalError("This shop URL is already taken. Please choose another one.");
+      return;
+    }
+    if (slugStatus === "invalid") {
+      setLocalError("Invalid URL slug. Only lowercase letters, numbers, and hyphens are allowed.");
+      return;
+    }
+
     setLocalError(null);
     setUploadStatus("Processing uploads...");
 
     try {
-      const slug = slugify(formData.name);
+      const slug = formData.slug || slugify(formData.name);
       const timestamp = Date.now();
 
       let logoUrl = formData.logo || "";
@@ -675,55 +746,76 @@ const ShopForm: React.FC<ShopFormProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-                <div className="md:col-span-1">
+              {/* Business Name & Custom URL Slug Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <Input
+                  label="Business Name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="e.g., Sharma Premium Groceries"
+                  required
+                />
+                
+                <div className="space-y-1">
                   <Input
-                    label="Business Name"
-                    name="name"
-                    value={formData.name}
+                    label="Custom Shop URL"
+                    name="slug"
+                    value={formData.slug}
                     onChange={handleChange}
-                    placeholder="e.g., Sharma Premium Groceries"
+                    placeholder="sharma-premium-groceries"
                     required
-                    helpText="This will define your unique ShopBajar URL"
+                    helpText={
+                      slugStatus === "checking" ? (
+                        <span className="text-zinc-550 flex items-center gap-1.5"><Loader2 className="animate-spin text-[#FF6A00]" size={12} /> Checking availability...</span>
+                      ) : slugStatus === "available" ? (
+                        <span className="text-emerald-600 font-semibold flex items-center gap-1">✓ URL is available</span>
+                      ) : slugStatus === "taken" ? (
+                        <span className="text-red-500 font-semibold flex items-center gap-1">✗ Already taken by another shop</span>
+                      ) : slugStatus === "invalid" ? (
+                        <span className="text-amber-600 flex items-center gap-1">⚠ Only lowercase letters, numbers, and hyphens allowed</span>
+                      ) : (
+                        "Only lowercase letters, numbers, and hyphens allowed"
+                      )
+                    }
                   />
                 </div>
+              </div>
 
-                <div className="md:col-span-1 space-y-3">
-                  <HybridSelect
-                    label="Market Category"
-                    name="category"
-                    value={formData.category}
-                    onChange={handleHybridChange}
-                    required
-                    options={[
-                      { value: "", label: "Select a category", disabled: true },
-                      ...dbCategories.map((c) => ({ value: c, label: c })),
-                      { value: "OTHER_PROPOSE", label: "➕ Propose new category..." },
-                    ]}
-                    showInput={showNewCategoryInput}
-                    onToggleInput={setShowNewCategoryInput}
-                    inputName="proposedCategory"
-                    inputValue={proposedCategory}
-                    onInputChange={(e) => setProposedCategory(e.target.value)}
-                    inputPlaceholder="e.g., Organic Lifestyle"
-                    inputHelpText="We will review and add this to our directory"
-                  />
-                </div>
+              {/* Categorization & Service Model Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
+                <HybridSelect
+                  label="Market Category"
+                  name="category"
+                  value={formData.category}
+                  onChange={handleHybridChange}
+                  required
+                  options={[
+                    { value: "", label: "Select a category", disabled: true },
+                    ...dbCategories.map((c) => ({ value: c, label: c })),
+                    { value: "OTHER_PROPOSE", label: "➕ Propose new category..." },
+                  ]}
+                  showInput={showNewCategoryInput}
+                  onToggleInput={setShowNewCategoryInput}
+                  inputName="proposedCategory"
+                  inputValue={proposedCategory}
+                  onInputChange={(e) => setProposedCategory(e.target.value)}
+                  inputPlaceholder="e.g., Organic Lifestyle"
+                  inputHelpText="We will review and add this to our directory"
+                />
 
-                <div className="md:col-span-1">
-                  <Select
-                    label="Service Model"
-                    name="businessType"
-                    value={formData.businessType}
-                    onChange={handleChange}
-                    required
-                    options={[
-                      { value: "product", label: "Product Based (Retail, Grocery)" },
-                      { value: "service", label: "Service Based (Salon, Repair)" },
-                      { value: "mixed", label: "Hybrid (Both Products & Services)" },
-                    ]}
-                  />
-                </div>
+                <Select
+                  label="Service Model"
+                  name="businessType"
+                  value={formData.businessType}
+                  onChange={handleChange}
+                  required
+                  options={[
+                    { value: "product", label: "Product Based (Retail, Grocery)" },
+                    { value: "service", label: "Service Based (Salon, Repair)" },
+                    { value: "mixed", label: "Hybrid (Both Products & Services)" },
+                  ]}
+                />
               </div>
 
               <Textarea

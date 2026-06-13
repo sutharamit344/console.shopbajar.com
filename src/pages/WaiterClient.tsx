@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, Link } from "react-router-dom";
 import { useShopOwner } from "@/hooks/useShopOwner";
-import { DOMAIN, MAIN_APP_URL } from "@/lib/config";
+import { DOMAIN, MAIN_APP_URL, getCustomerAppUrl } from "@/lib/config";
 import {
   listenTables,
   listenSessions,
@@ -11,15 +11,32 @@ import {
   closeSession,
   updateOrderItemStatus,
   updateTable,
-  updateOrderStatus
+  updateOrderStatus,
 } from "@/lib/rtdb";
 import Card from "@/components/UI/Card";
 import Button from "@/components/UI/Button";
 import Dialog from "@/components/UI/Dialog";
 import {
-  Bell, Clock, Check, X, Loader2, Table2, Printer, Coins,
-  ChefHat, ArrowLeft, UtensilsCrossed, AlertCircle, CheckCircle2,
-  Store, User, Phone, ShoppingBag, Calculator
+  Bell,
+  Clock,
+  Check,
+  X,
+  Loader2,
+  Table2,
+  Printer,
+  Coins,
+  ChefHat,
+  ArrowLeft,
+  UtensilsCrossed,
+  AlertCircle,
+  CheckCircle2,
+  Store,
+  User,
+  Phone,
+  ShoppingBag,
+  Calculator,
+  Search,
+  ChevronRight,
 } from "lucide-react";
 
 export default function WaiterClient() {
@@ -35,8 +52,25 @@ export default function WaiterClient() {
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("tables"); // "tables" | "deliver" | "approvals"
   const [servingItemId, setServingItemId] = useState<any>(null); // { orderId, itemIndex }
+  const [servingGroupSessionId, setServingGroupSessionId] = useState<string | null>(null);
+  const [revertingItemId, setRevertingItemId] = useState<any>(null); // { orderId, itemIndex }
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [confirmAction, setConfirmAction] = useState<any>(null); // { message, onConfirm }
+  const [waiterName, setWaiterName] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("Cash");
+  const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (shop?.id) {
+      const cachedName = localStorage.getItem(`last_waiter_name_${shop.id}`);
+      if (cachedName) {
+        setWaiterName(cachedName);
+      } else if (user) {
+        setWaiterName(user.displayName || user.email || "");
+      }
+    }
+  }, [user, shop?.id]);
 
   useEffect(() => {
     if (initialShop) {
@@ -71,7 +105,11 @@ export default function WaiterClient() {
     const code = getSessionCode(session.id || session.sessionId);
     const codeSuffix = code ? ` [#${code}]` : "";
     if (session.guests && Object.keys(session.guests).length > 0) {
-      return Object.values(session.guests).map((g: any) => g.name).join(", ") + codeSuffix;
+      return (
+        Object.values(session.guests)
+          .map((g: any) => g.name)
+          .join(", ") + codeSuffix
+      );
     }
     return (session.customerName || "Guest") + codeSuffix;
   };
@@ -79,7 +117,10 @@ export default function WaiterClient() {
   const getGuestPhones = (session) => {
     if (!session) return "";
     if (session.guests && Object.keys(session.guests).length > 0) {
-      return Object.values(session.guests).map((g: any) => g.phone).filter(Boolean).join(", ");
+      return Object.values(session.guests)
+        .map((g: any) => g.phone)
+        .filter(Boolean)
+        .join(", ");
     }
     return session.customerPhone || "";
   };
@@ -111,6 +152,28 @@ export default function WaiterClient() {
     }
   });
 
+  // Group ready to serve items by session (representing table + session)
+  const groupedReadyItems: { [sessionId: string]: {
+    sessionId: string;
+    tableName: string;
+    customerName: string;
+    items: any[];
+  }} = {};
+
+  readyToServeItems.forEach((item) => {
+    if (!groupedReadyItems[item.sessionId]) {
+      groupedReadyItems[item.sessionId] = {
+        sessionId: item.sessionId,
+        tableName: item.tableName,
+        customerName: item.customerName,
+        items: [],
+      };
+    }
+    groupedReadyItems[item.sessionId].items.push(item);
+  });
+
+  const groupedReadyList = Object.values(groupedReadyItems);
+
   const handleApproveSession = (session) => {
     setConfirmAction({
       title: "Approve Scan Request",
@@ -118,7 +181,7 @@ export default function WaiterClient() {
       onConfirm: async () => {
         if (!shop?.id) return;
         await approveSession(shop.id, session.id, session.tableId);
-      }
+      },
     });
   };
 
@@ -129,20 +192,23 @@ export default function WaiterClient() {
       onConfirm: async () => {
         if (!shop?.id) return;
         await closeSession(shop.id, session.id, session.tableId);
-      }
+      },
     });
   };
 
   const handleMarkServed = async (serveItem) => {
     if (!shop?.id) return;
-    setServingItemId({ orderId: serveItem.orderId, itemIndex: serveItem.itemIndex });
+    setServingItemId({
+      orderId: serveItem.orderId,
+      itemIndex: serveItem.itemIndex,
+    });
     try {
       await updateOrderItemStatus(
         shop.id,
         serveItem.sessionId,
         serveItem.orderId,
         serveItem.itemIndex,
-        "served"
+        "served",
       );
     } catch (err) {
       console.error("Failed to serve item:", err);
@@ -151,12 +217,59 @@ export default function WaiterClient() {
     }
   };
 
+  const handleMarkGroupServed = async (items: any[]) => {
+    if (!shop?.id || items.length === 0) return;
+    const firstItem = items[0];
+    setServingGroupSessionId(firstItem.sessionId);
+    try {
+      await Promise.all(
+        items.map((item) =>
+          updateOrderItemStatus(
+            shop.id,
+            item.sessionId,
+            item.orderId,
+            item.itemIndex,
+            "served",
+          )
+        )
+      );
+    } catch (err) {
+      console.error("Failed to serve group:", err);
+    } finally {
+      setServingGroupSessionId(null);
+    }
+  };
+
+  const handleRevertServedItem = async (serveItem: any) => {
+    if (!shop?.id) return;
+    setRevertingItemId({
+      orderId: serveItem.orderId,
+      itemIndex: serveItem.itemIndex,
+    });
+    try {
+      await updateOrderItemStatus(
+        shop.id,
+        serveItem.sessionId,
+        serveItem.orderId,
+        serveItem.itemIndex,
+        "ready",
+      );
+    } catch (err) {
+      console.error("Failed to revert served item:", err);
+    } finally {
+      setRevertingItemId(null);
+    }
+  };
+
   const handlePrintSlip = (session, activeTableOrders) => {
     const printWindow = window.open("", "_blank", "width=420,height=700");
     if (!printWindow) return;
 
     const dateStr = new Date().toLocaleDateString("en-IN");
-    const timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+    const timeStr = new Date().toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
     // Consolidate ordered items
     const consolidatedItems = {};
@@ -177,20 +290,24 @@ export default function WaiterClient() {
     });
 
     const itemsArray = Object.values(consolidatedItems) as any[];
-    const finalTotal = itemsArray.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+    const finalTotal = itemsArray.reduce(
+      (sum: number, item: any) => sum + item.price * item.qty,
+      0,
+    );
 
-    const itemRows = itemsArray.map((item: any) => {
-      const lineTotal = item.qty * item.price;
-      return `
-        <div class="item">
-          <div class="item-top">
-            <span class="item-name">${item.name || "Item"}</span>
-            <span class="item-total">₹${lineTotal.toFixed(0)}</span>
-          </div>
-          <div class="item-meta">${item.qty} x ₹${item.price.toFixed(0)}</div>
-        </div>
+    const itemRows = itemsArray
+      .map((item: any) => {
+        const lineTotal = item.qty * item.price;
+        return `
+        <tr>
+          <td align="left" class="item-name">${item.name || "Item"}</td>
+          <td align="center">${item.qty}</td>
+          <td align="right">₹${item.price.toFixed(2)}</td>
+          <td align="right"><strong>₹${lineTotal.toFixed(2)}</strong></td>
+        </tr>
       `;
-    }).join("");
+      })
+      .join("");
 
     const guestName = getGuestNames(session);
     const guestPhone = getGuestPhones(session);
@@ -207,7 +324,7 @@ export default function WaiterClient() {
             color: #111;
             margin: 0;
             padding: 0;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.4;
           }
           .slip {
@@ -216,18 +333,23 @@ export default function WaiterClient() {
           }
           .center { text-align: center; }
           .title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             margin-bottom: 4px;
             text-transform: uppercase;
           }
           .muted {
             color: #444;
-            font-size: 11px;
+            font-size: 10px;
           }
           .divider {
             border-top: 1px dashed #000;
-            margin: 10px 0;
+            margin: 8px 0;
+          }
+          .double-divider {
+            border-top: 3px double #000;
+            margin: 8px 0;
+            height: 0;
           }
           .row {
             display: flex;
@@ -238,43 +360,39 @@ export default function WaiterClient() {
           .label {
             color: #444;
           }
-          .item {
-            padding: 6px 0;
-            border-bottom: 1px dashed #ccc;
+          .receipt-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 6px 0;
+            font-family: "Courier New", monospace;
+            font-size: 10px;
           }
-          .item-top {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            align-items: flex-start;
-          }
-          .item-name {
+          .receipt-table th {
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 4px 0;
             font-weight: 700;
+            text-transform: uppercase;
+          }
+          .receipt-table td {
+            padding: 4px 0;
+            vertical-align: top;
             word-break: break-word;
           }
-          .item-total {
-            font-weight: 700;
-            white-space: nowrap;
-          }
-          .item-meta {
-            color: #444;
-            font-size: 11px;
-            margin-top: 2px;
-          }
           .grand-total {
-            font-size: 15px;
+            font-size: 13px;
             font-weight: 700;
             margin-top: 8px;
           }
           .footer {
             margin-top: 15px;
             text-align: center;
-            font-size: 11px;
+            font-size: 10px;
           }
           .paid-stamp {
             border: 2px solid #000;
             color: #000;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: bold;
             padding: 4px 8px;
             margin: 12px auto;
@@ -296,7 +414,7 @@ export default function WaiterClient() {
             <div class="muted">${[shop.area, shop.city].filter(Boolean).join(", ")}</div>
           </div>
 
-          <div class="divider"></div>
+          <div class="double-divider"></div>
 
           <div class="row"><span class="label">Table</span><span><strong>${session.tableName || "Table"}</strong></span></div>
           <div class="row"><span class="label">Session ID</span><span>#${session.id?.substring(0, 6).toUpperCase() || "-"}</span></div>
@@ -308,15 +426,27 @@ export default function WaiterClient() {
           <div class="row"><span class="label">Customer</span><span>${guestName || "Guest"}</span></div>
           ${guestPhone ? `<div class="row"><span class="label">Phone</span><span>${guestPhone}</span></div>` : ""}
 
-          <div class="divider"></div>
+          <div class="double-divider"></div>
 
-          ${itemRows || '<div class="center muted">No items ordered</div>'}
+          <table class="receipt-table">
+            <thead>
+              <tr>
+                <th align="left" style="width: 45%;">ITEM</th>
+                <th align="center" style="width: 15%;">QTY</th>
+                <th align="right" style="width: 20%;">PRICE</th>
+                <th align="right" style="width: 20%;">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itemRows || '<tr><td colspan="4" class="center muted" style="padding: 12px 0;">No items ordered</td></tr>'}
+            </tbody>
+          </table>
 
-          <div class="divider"></div>
+          <div class="double-divider"></div>
 
           <div class="row grand-total">
             <span>TOTAL AMOUNT</span>
-            <span>₹${finalTotal.toFixed(0)}</span>
+            <span>₹${finalTotal.toFixed(2)}</span>
           </div>
 
           <div class="paid-stamp">PAID</div>
@@ -341,6 +471,9 @@ export default function WaiterClient() {
   };
 
   const handleCheckoutSession = (session, activeTableOrders) => {
+    const finalWaiterName = waiterName.trim() || "Staff";
+    const finalPaymentMethod = paymentMethod;
+
     setConfirmAction({
       title: "Checkout & Close Table",
       message: `Finalize checkout for "${getGuestNames(session)}" at ${session.tableName}? This prints a POS receipt and frees up the table.`,
@@ -351,22 +484,33 @@ export default function WaiterClient() {
           // Print POS Receipt
           handlePrintSlip(session, activeTableOrders);
 
-          // Close session in DB
-          await closeSession(shop.id, session.id, session.tableId);
+          // Close session in DB with checkout summary metadata
+          await closeSession(shop.id, session.id, session.tableId, {
+            collectedBy: finalWaiterName,
+            paymentMethod: finalPaymentMethod,
+            billAmount: billGrandTotal,
+            items: billItemsArray,
+          });
+
+          // Cache waiter name for convenience
+          localStorage.setItem(`last_waiter_name_${shop.id}`, finalWaiterName);
 
           // Find linked tables to clear currentSessionId
-          const linkedTables = tables.filter((t) => t.currentSessionId === session.id);
+          const linkedTables = tables.filter(
+            (t) => t.currentSessionId === session.id,
+          );
           for (const lt of linkedTables) {
             await updateTable(shop.id, lt.id, { currentSessionId: null });
           }
 
           setSelectedTableId(null);
+          setPaymentMethod("Cash");
         } catch (e) {
           console.error("Checkout failed:", e);
         } finally {
           setCheckoutLoading(false);
         }
-      }
+      },
     });
   };
 
@@ -382,10 +526,23 @@ export default function WaiterClient() {
     return (
       <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 flex items-center justify-center">
         <div className="max-w-md mx-auto px-4 py-16 text-center bg-white dark:bg-zinc-900 border border-black/[0.05] dark:border-zinc-800 rounded-md shadow-lg">
-          <Store size={40} className="mx-auto text-zinc-350 dark:text-zinc-600 mb-4" />
-          <p className="text-[14px] font-bold text-zinc-900 dark:text-zinc-100">{error || "No shop found."}</p>
+          <Store
+            size={40}
+            className="mx-auto text-zinc-350 dark:text-zinc-600 mb-4"
+          />
+          <p className="text-[14px] font-bold text-zinc-900 dark:text-zinc-100">
+            {error || "No shop found."}
+          </p>
           {!isPortal && (
-            <Button variant="dark" className="mt-6" onClick={() => window.location.href = `${MAIN_APP_URL}/dashboard`}>Go to Dashboard</Button>
+            <Button
+              variant="dark"
+              className="mt-6"
+              onClick={() =>
+                (window.location.href = getCustomerAppUrl('/dashboard'))
+              }
+            >
+              Go to Dashboard
+            </Button>
           )}
         </div>
       </div>
@@ -394,9 +551,10 @@ export default function WaiterClient() {
 
   // Check paid feature gate
   const hasQrOrdering = !!shop?.paidFeatures?.qr_ordering?.enabled;
-  const hasBilling = !!shop?.paidFeatures?.billing_system?.enabled ||
-                     !!shop?.paidFeatures?.invoice_tools?.enabled ||
-                     !!shop?.paidFeatures?.pos_slip_tools?.enabled;
+  const hasBilling =
+    !!shop?.paidFeatures?.billing_system?.enabled ||
+    !!shop?.paidFeatures?.invoice_tools?.enabled ||
+    !!shop?.paidFeatures?.pos_slip_tools?.enabled;
 
   if (!hasQrOrdering) {
     return (
@@ -414,9 +572,13 @@ export default function WaiterClient() {
                 <div className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-100 rounded border border-black/[0.04] text-[9px] font-black uppercase tracking-wider text-[#FF6A00]">
                   SaaS Add-on Feature
                 </div>
-                <h2 className="text-base font-bold text-[#0A0A0F] tracking-tight">Waiter Live Dashboard</h2>
+                <h2 className="text-base font-bold text-[#0A0A0F] tracking-tight">
+                  Waiter Live Dashboard
+                </h2>
                 <p className="text-[12px] text-[#0A0A0F]/55 max-w-sm font-medium leading-relaxed">
-                  Unlock the waiter live console for table session approvals, instant FOH service notifications, and POS checkout management.
+                  Unlock the waiter live console for table session approvals,
+                  instant FOH service notifications, and POS checkout
+                  management.
                 </p>
               </div>
 
@@ -424,7 +586,9 @@ export default function WaiterClient() {
                 <Button
                   variant="ghost"
                   className="text-xs h-9 font-bold"
-                  onClick={() => window.location.href = `${MAIN_APP_URL}/dashboard`}
+                  onClick={() =>
+                    (window.location.href = getCustomerAppUrl('/dashboard'))
+                  }
                 >
                   Back to Dashboard
                 </Button>
@@ -432,7 +596,9 @@ export default function WaiterClient() {
                   variant="dark"
                   icon={Check}
                   className="text-xs h-9 shadow-sm font-bold"
-                  onClick={() => window.location.href = `${MAIN_APP_URL}/dashboard/manage?id=${shop.id}&view=features`}
+                  onClick={() =>
+                    (window.location.href = getCustomerAppUrl(`/dashboard/manage?id=${shop.id}&view=features`))
+                  }
                 >
                   Upgrade & Activate Add-on
                 </Button>
@@ -447,7 +613,9 @@ export default function WaiterClient() {
   // Get selected table and its active session/orders
   const selectedTable = tables.find((t) => t.id === selectedTableId);
   const activeTableSession = selectedTable
-    ? activeSessions.find((s) => s.id === selectedTable.currentSessionId || (s.tableId === selectedTable.id && s.status === "active"))
+    ? selectedTable.currentSessionId
+      ? activeSessions.find((s) => s.id === selectedTable.currentSessionId)
+      : activeSessions.find((s) => s.tableId === selectedTable.id && s.status === "active")
     : null;
 
   const activeTableOrders = activeTableSession
@@ -473,28 +641,54 @@ export default function WaiterClient() {
   });
 
   const billItemsArray = Object.values(billSummaryItems) as any[];
-  const billGrandTotal = billItemsArray.reduce((sum: number, item: any) => sum + (item.price * item.qty), 0);
+  const billGrandTotal = billItemsArray.reduce(
+    (sum: number, item: any) => sum + item.price * item.qty,
+    0,
+  );
+
+  // Group served items by name for inline reversion
+  const servedInstancesByName: { [itemName: string]: any[] } = {};
+  activeTableOrders.forEach((order) => {
+    if (order.status === "cancelled") return;
+    order.items?.forEach((item: any, idx: number) => {
+      if (item.status === "served") {
+        if (!servedInstancesByName[item.name]) {
+          servedInstancesByName[item.name] = [];
+        }
+        servedInstancesByName[item.name].push({
+          orderId: order.id,
+          sessionId: order.sessionId,
+          itemIndex: idx,
+          name: item.name,
+          qty: item.qty,
+          status: item.status,
+        });
+      }
+    });
+  });
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-150 pb-24 sm:pb-6 transition-colors duration-200">
-      <div className="w-full px-4 md:px-6 py-6 max-w-7xl mx-auto">
-
+      <div className="w-full px-4 md:px-8 py-4">
         {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-3.5 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-6 mb-4 shadow-2xs transition-all">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link to={`${isPortal ? "/portal" : ""}/tables?shopId=${shop.id}`} className="w-8 h-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 transition-colors shadow-sm shrink-0" title="Back to Seating Map">
-              <ArrowLeft size={15} />
+        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Link
+              to={`${isPortal ? "/portal" : ""}/tables?shopId=${shop.id}`}
+              className="w-7 h-7 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 transition-colors shadow-sm shrink-0"
+              title="Back to Seating Map"
+            >
+              <ArrowLeft size={13} />
             </Link>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-[16px] font-bold text-[#0A0A0F] dark:text-zinc-100 tracking-tight leading-none truncate">Waiter Console</h1>
-                {activeSessions.length > 0 && (
-                  <span className="text-[9px] sm:text-[10px] font-black bg-[#FF6A00] text-white px-2 py-0.5 rounded-full shrink-0">
-                    {activeSessions.length} active
-                  </span>
-                )}
-              </div>
-              <p className="text-[10.5px] text-[#0A0A0F]/40 dark:text-zinc-400 font-medium mt-1 truncate">{shop.name}</p>
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                {shop.name}
+              </span>
+              {activeSessions.length > 0 && (
+                <span className="text-[9px] font-black bg-[#FF6A00]/10 text-[#FF6A00] px-1.5 py-0.5 rounded border border-[#FF6A00]/15 shrink-0">
+                  {activeSessions.length} ACTIVE
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -505,7 +699,10 @@ export default function WaiterClient() {
                 onClick={() => {
                   const staffUrl = `${window.location.origin}/portal/waiter?shopId=${shop.id}`;
                   navigator.clipboard.writeText(staffUrl);
-                  alert("Copied Staff Waiter Link to clipboard!\nShare this with your staff. PIN: " + (shop.staffPin || "1234"));
+                  alert(
+                    "Copied Staff Waiter Link to clipboard!\nShare this with your staff. PIN: " +
+                      (shop.staffPin || "1234"),
+                  );
                 }}
                 className="h-8 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
               >
@@ -538,9 +735,28 @@ export default function WaiterClient() {
         {/* Mobile-First Tab Navigation (Fixed to bottom on mobile, inline at top on desktop) */}
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-black/[0.08] dark:border-zinc-850 p-2.5 flex items-center gap-1 shadow-lg sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto sm:bg-zinc-150 sm:dark:bg-zinc-900 sm:border sm:border-black/[0.05] sm:dark:border-zinc-800 sm:p-1 sm:rounded-md sm:mb-6 sm:shadow-none">
           {[
-            { id: "tables", label: "Tables Floor", icon: Table2, badge: activeSessions.length, badgeColor: "bg-emerald-500 text-white" },
-            { id: "deliver", label: "Ready to Serve", icon: UtensilsCrossed, badge: readyToServeItems.length, badgeColor: "bg-amber-500 text-white" },
-            { id: "approvals", label: "Entry Requests", icon: Bell, badge: pendingSessions.length, badgeColor: "bg-[#FF6A00] text-white" }
+            {
+              id: "tables",
+              label: "Tables Floor",
+              icon: Table2,
+              badge: activeSessions.length,
+              badgeColor: "bg-emerald-500 text-white",
+            },
+            {
+              id: "deliver",
+              label: "Ready to Serve",
+              icon: UtensilsCrossed,
+              badge: readyToServeItems.length,
+              badgeColor: "bg-amber-500 text-white",
+            },
+            {
+              id: "approvals",
+              label: "Entry Requests",
+              icon: Bell,
+              badge: pendingSessions.length,
+              badgeColor: "bg-[#FF6A00] text-white",
+            },
+
           ].map((tab) => {
             const TabIcon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -555,14 +771,25 @@ export default function WaiterClient() {
                 }`}
               >
                 <div className="relative shrink-0 flex items-center justify-center">
-                  <TabIcon size={14} className={isActive ? "text-[#FF6A00] sm:text-inherit" : "text-inherit"} />
+                  <TabIcon
+                    size={14}
+                    className={
+                      isActive
+                        ? "text-[#FF6A00] sm:text-inherit"
+                        : "text-inherit"
+                    }
+                  />
                   {tab.badge > 0 && (
-                    <span className={`absolute -top-2.5 -right-3.5 text-[8px] font-black h-4 px-1 flex items-center justify-center rounded-full ${tab.badgeColor} scale-90`}>
+                    <span
+                      className={`absolute -top-2.5 -right-3.5 text-[8px] font-black h-4 px-1 flex items-center justify-center rounded-full ${tab.badgeColor} scale-90`}
+                    >
                       {tab.badge}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] sm:text-[11px] mt-1 sm:mt-0">{tab.label}</span>
+                <span className="text-[10px] sm:text-[11px] mt-1 sm:mt-0">
+                  {tab.label}
+                </span>
               </button>
             );
           })}
@@ -570,7 +797,6 @@ export default function WaiterClient() {
 
         {/* Tab Workspace */}
         <div className="space-y-6">
-
           {/* Tab 1: Entry Requests */}
           {activeTab === "approvals" && (
             <div>
@@ -580,25 +806,47 @@ export default function WaiterClient() {
               </p>
               {pendingSessions.length === 0 ? (
                 <div className="py-16 text-center bg-white dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-6 rounded-md shadow-2xs">
-                  <Bell size={32} className="mx-auto text-zinc-250 dark:text-zinc-700 mb-2.5" />
-                  <p className="text-xs font-bold text-zinc-400 dark:text-zinc-550">No pending scan requests</p>
-                  <p className="text-[10px] text-zinc-400/80 dark:text-zinc-500 mt-0.5">When customers scan a QR code, their request will appear here.</p>
+                  <Bell
+                    size={32}
+                    className="mx-auto text-zinc-250 dark:text-zinc-700 mb-2.5"
+                  />
+                  <p className="text-xs font-bold text-zinc-400 dark:text-zinc-550">
+                    No pending scan requests
+                  </p>
+                  <p className="text-[10px] text-zinc-400/80 dark:text-zinc-500 mt-0.5">
+                    When customers scan a QR code, their request will appear
+                    here.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {pendingSessions.map((session) => (
-                    <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-amber-900/40 rounded-md shadow-2xs">
+                    <div
+                      key={session.id}
+                      className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-white dark:bg-zinc-900 border border-amber-200/60 dark:border-amber-900/40 rounded-md shadow-2xs"
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-md bg-amber-50 dark:bg-amber-955/20 border border-amber-100 dark:border-amber-900/30 flex items-center justify-center text-amber-550 shrink-0">
                           <Table2 size={16} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-bold text-[#0A0A0F] dark:text-zinc-150">
-                            {session.tableName} <span className="text-[#0A0A0F]/30 dark:text-zinc-505 font-medium font-mono text-[11px]">#{session.id?.substring(0, 4).toUpperCase()}</span>
+                          <p className="text-[13px] font-bold text-[#0A0A0F] dark:text-zinc-150 flex items-center gap-1.5">
+                            <span className="relative flex h-2 w-2 shrink-0">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75 shadow-[0_0_8px_#f59e0b]" />
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                            </span>
+                            {session.tableName}{" "}
+                            <span className="text-[#0A0A0F]/30 dark:text-zinc-505 font-medium font-mono text-[11px]">
+                              #{session.id?.substring(0, 4).toUpperCase()}
+                            </span>
                           </p>
                           <p className="text-[11px] text-[#0A0A0F]/50 dark:text-zinc-400 mt-0.5 truncate">
-                            Customer: <span className="font-semibold text-zinc-700 dark:text-zinc-300">{getGuestNames(session)}</span>
-                            {getGuestPhones(session) && ` (📞 ${getGuestPhones(session)})`}
+                            Customer:{" "}
+                            <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                              {getGuestNames(session)}
+                            </span>
+                            {getGuestPhones(session) &&
+                              ` (📞 ${getGuestPhones(session)})`}
                           </p>
                         </div>
                       </div>
@@ -630,41 +878,87 @@ export default function WaiterClient() {
                 <UtensilsCrossed size={12} />
                 Ready to Serve Pickup Tray
               </p>
-              {readyToServeItems.length === 0 ? (
+              {groupedReadyList.length === 0 ? (
                 <div className="py-16 text-center bg-white dark:bg-zinc-900 rounded-md border border-black/[0.04] dark:border-zinc-800 p-6 shadow-2xs">
-                  <CheckCircle2 size={32} className="mx-auto text-emerald-500/20 mb-2.5" />
-                  <p className="text-[12px] font-bold text-zinc-400 dark:text-zinc-550">All items are delivered</p>
-                  <p className="text-[10px] text-zinc-400/70 dark:text-zinc-500 mt-0.5">Prepared dishes will show up here to be delivered to tables.</p>
+                  <CheckCircle2
+                    size={32}
+                    className="mx-auto text-emerald-500/20 mb-2.5"
+                  />
+                  <p className="text-[12px] font-bold text-zinc-400 dark:text-zinc-550">
+                    All items are delivered
+                  </p>
+                  <p className="text-[10px] text-zinc-400/70 dark:text-zinc-500 mt-0.5">
+                    Prepared dishes will show up here to be delivered to tables.
+                  </p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {readyToServeItems.map((serveItem, idx) => {
-                    const isServing = servingItemId?.orderId === serveItem.orderId && servingItemId?.itemIndex === serveItem.itemIndex;
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groupedReadyList.map((group, groupIdx) => {
+                    const isGroupServing = servingGroupSessionId === group.sessionId;
                     return (
-                      <div key={idx} className="flex items-center justify-between gap-3 p-3 bg-emerald-50/40 dark:bg-emerald-955/10 border border-emerald-100 dark:border-emerald-900/30 rounded-md shadow-2xs">
-                        <div className="min-w-0">
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-500 text-white text-[8px] font-black uppercase tracking-wider mb-1.5">
-                            Ready
-                          </span>
-                          <p className="text-[13px] font-bold text-[#0A0A0F] dark:text-zinc-150 truncate">
-                            <span className="text-[#FF6A00] font-black">{serveItem.qty}×</span> {serveItem.name}
-                          </p>
-                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-semibold mt-0.5">
-                            📍 {serveItem.tableName} · {serveItem.customerName}
-                          </p>
+                      <div
+                        key={groupIdx}
+                        className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-zinc-800 rounded-md shadow-2xs p-4 flex flex-col justify-between space-y-4 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all"
+                      >
+                        {/* Group Header */}
+                        <div className="flex justify-between items-start border-b border-black/[0.04] dark:border-zinc-800 pb-2">
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-extrabold text-[#0A0A0F] dark:text-zinc-150 flex items-center gap-2">
+                              <span className="relative flex h-2 w-2 shrink-0">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                              </span>
+                              {group.tableName}
+                            </h3>
+                            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-semibold mt-0.5 truncate">
+                              👤 {group.customerName}
+                            </p>
+                          </div>
+                          <button
+                            disabled={isGroupServing}
+                            onClick={() => handleMarkGroupServed(group.items)}
+                            className="h-7 px-2.5 rounded bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white text-[10px] font-black shrink-0 flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          >
+                            {isGroupServing ? (
+                              <Loader2 size={10} className="animate-spin" />
+                            ) : (
+                              <CheckCircle2 size={11} className="stroke-[3]" />
+                            )}
+                            Serve All
+                          </button>
                         </div>
-                        <button
-                          disabled={isServing}
-                          onClick={() => handleMarkServed(serveItem)}
-                          className="h-10 sm:h-8 px-3.5 rounded-md bg-[#0A0A0F] dark:bg-zinc-100 text-white dark:text-zinc-950 hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 text-[11px] font-bold shrink-0 flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
-                        >
-                          {isServing ? (
-                            <Loader2 size={12} className="animate-spin" />
-                          ) : (
-                            <Check size={12} className="stroke-[3]" />
-                          )}
-                          Served
-                        </button>
+
+                        {/* Items List */}
+                        <div className="space-y-2 flex-1">
+                          {group.items.map((serveItem, itemIdx) => {
+                            const isServing =
+                              servingItemId?.orderId === serveItem.orderId &&
+                              servingItemId?.itemIndex === serveItem.itemIndex;
+                            return (
+                              <div
+                                key={itemIdx}
+                                className="flex items-center justify-between text-xs p-2 rounded bg-zinc-50 dark:bg-zinc-950 border border-black/[0.02] dark:border-zinc-850"
+                              >
+                                <span className="font-bold text-[#0A0A0F] dark:text-zinc-200">
+                                  <span className="text-[#FF6A00] font-black mr-1">{serveItem.qty}×</span>
+                                  {serveItem.name}
+                                </span>
+                                <button
+                                  disabled={isServing || isGroupServing}
+                                  onClick={() => handleMarkServed(serveItem)}
+                                  className="h-6 w-6 rounded border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-500 dark:text-zinc-450 hover:text-emerald-500 dark:hover:text-emerald-400 hover:border-emerald-200 dark:hover:border-emerald-900/40 flex items-center justify-center cursor-pointer transition-all shadow-2xs"
+                                  title="Mark item as served"
+                                >
+                                  {isServing ? (
+                                    <Loader2 size={10} className="animate-spin" />
+                                  ) : (
+                                    <Check size={10} className="stroke-[3]" />
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     );
                   })}
@@ -681,33 +975,69 @@ export default function WaiterClient() {
               </p>
               {tables.length === 0 ? (
                 <div className="py-16 text-center bg-white dark:bg-zinc-900 rounded-md border border-dashed border-black/[0.1] dark:border-zinc-800">
-                  <Table2 size={36} className="mx-auto text-zinc-250 dark:text-zinc-700 mb-3" />
-                  <p className="text-xs font-bold text-zinc-450 dark:text-zinc-500">No tables configured.</p>
+                  <Table2
+                    size={36}
+                    className="mx-auto text-zinc-250 dark:text-zinc-700 mb-3"
+                  />
+                  <p className="text-xs font-bold text-zinc-450 dark:text-zinc-500">
+                    No tables configured.
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                   {tables.map((table) => {
-                    const session = activeSessions.find(
-                      (s) => s.id === table.currentSessionId || (s.tableId === table.id && s.status === "active")
+                    const session = table.currentSessionId
+                      ? activeSessions.find((s) => s.id === table.currentSessionId)
+                      : activeSessions.find((s) => s.tableId === table.id && s.status === "active");
+                    const isPending = pendingSessions.some(
+                      (s) => s.tableId === table.id,
                     );
-                    const isPending = pendingSessions.some((s) => s.tableId === table.id);
                     const isSelected = selectedTableId === table.id;
 
                     return (
                       <button
                         key={table.id}
-                        onClick={() => setSelectedTableId(isSelected ? null : table.id)}
+                        onClick={() =>
+                          setSelectedTableId(isSelected ? null : table.id)
+                        }
                         className={`flex flex-col items-center justify-between text-center p-3.5 rounded-md border transition-all relative cursor-pointer min-h-[100px] ${
                           isPending
                             ? "bg-amber-50/50 dark:bg-amber-955/10 border-amber-250 dark:border-amber-900/60 hover:border-amber-355 text-[#0A0A0F] dark:text-zinc-100"
                             : session
-                            ? "bg-emerald-50/40 dark:bg-emerald-955/10 border-emerald-250 dark:border-emerald-900/60 hover:border-emerald-355 text-[#0A0A0F] dark:text-zinc-100"
-                            : "bg-white dark:bg-zinc-900 border-black/[0.06] dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-750 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                              ? "bg-emerald-50/40 dark:bg-emerald-955/10 border-emerald-250 dark:border-emerald-900/60 hover:border-emerald-355 text-[#0A0A0F] dark:text-zinc-100"
+                              : "bg-white dark:bg-zinc-900 border-black/[0.06] dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-750 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                         } ${isSelected ? "ring-2 ring-[#FF6A00] ring-offset-2 dark:ring-offset-zinc-950 border-transparent scale-[1.02]" : ""}`}
                       >
+                        {/* Pulsing neon status dot at top-right */}
+                        {(isPending || session) && (
+                          <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                              isPending 
+                                ? "bg-amber-400 shadow-[0_0_8px_#f59e0b]" 
+                                : "bg-emerald-400 shadow-[0_0_8px_#10b981]"
+                            }`} />
+                            <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                              isPending 
+                                ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" 
+                                : "bg-emerald-500 shadow-[0_0_8px_#10b981]"
+                            }`} />
+                          </span>
+                        )}
+
                         <div className="flex flex-col items-center">
-                          <Table2 size={20} className={isPending ? "text-amber-500" : session ? "text-emerald-500" : "text-zinc-300 dark:text-zinc-700"} />
-                          <span className="text-[12px] font-extrabold tracking-tight mt-1.5 block">{table.name}</span>
+                          <Table2
+                            size={20}
+                            className={
+                              isPending
+                                ? "text-amber-500"
+                                : session
+                                  ? "text-emerald-500"
+                                  : "text-zinc-300 dark:text-zinc-700"
+                            }
+                          />
+                          <span className="text-[12px] font-extrabold tracking-tight mt-1.5 block">
+                            {table.name}
+                          </span>
                         </div>
 
                         <div className="mt-2 w-full">
@@ -733,8 +1063,8 @@ export default function WaiterClient() {
             </div>
           )}
 
-        </div>
 
+        </div>
       </div>
 
       {/* Dynamic Table Details Drawer/Dialog Overlay for Mobile and Desktop Checkouts */}
@@ -752,7 +1082,9 @@ export default function WaiterClient() {
                 <div className="text-xs space-y-1 bg-zinc-50 dark:bg-zinc-950 border border-black/[0.03] dark:border-zinc-850 p-3 rounded-md">
                   <p className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
                     <User size={13} className="text-[#FF6A00]" />
-                    <span className="font-extrabold">{getGuestNames(activeTableSession)}</span>
+                    <span className="font-extrabold">
+                      {getGuestNames(activeTableSession)}
+                    </span>
                   </p>
                   {getGuestPhones(activeTableSession) && (
                     <p className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 mt-1 font-mono">
@@ -768,22 +1100,58 @@ export default function WaiterClient() {
                     Consolidated Bill Details
                   </p>
                   {billItemsArray.length === 0 ? (
-                    <p className="text-[11px] text-zinc-450 dark:text-zinc-500 italic text-center py-4">No active items ordered yet.</p>
+                    <p className="text-[11px] text-zinc-450 dark:text-zinc-500 italic text-center py-4">
+                      No active items ordered yet.
+                    </p>
                   ) : (
                     <div className="divide-y divide-black/[0.04] dark:divide-zinc-800 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                      {billItemsArray.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-start text-xs pt-2 first:pt-0">
-                          <div className="min-w-0">
-                            <p className="font-bold text-[#0A0A0F] dark:text-zinc-200 truncate">{item.name}</p>
-                            <p className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5">
-                              {item.qty} × ₹{item.price}
-                            </p>
+                      {billItemsArray.map((item, idx) => {
+                        const servedForThisItem = servedInstancesByName[item.name] || [];
+                        const firstServedInstance = servedForThisItem[0];
+                        const isReverting = firstServedInstance && 
+                          revertingItemId?.orderId === firstServedInstance.orderId && 
+                          revertingItemId?.itemIndex === firstServedInstance.itemIndex;
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex justify-between items-start text-xs pt-2 first:pt-0"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-bold text-[#0A0A0F] dark:text-zinc-200 truncate">
+                                {item.name}
+                              </p>
+                              <div className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                <span>{item.qty} × ₹{item.price}</span>
+                                {servedForThisItem.length > 0 && (
+                                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-955/20 px-1 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
+                                    {servedForThisItem.length} served
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2.5 shrink-0">
+                              <span className="font-bold text-zinc-800 dark:text-zinc-300">
+                                ₹{item.price * item.qty}
+                              </span>
+                              {servedForThisItem.length > 0 && (
+                                <button
+                                  disabled={isReverting}
+                                  onClick={() => handleRevertServedItem(firstServedInstance)}
+                                  className="h-6 px-1.5 rounded border border-rose-100 dark:border-rose-950 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-[10px] font-bold flex items-center justify-center cursor-pointer transition-all shadow-2xs"
+                                  title="Revert one served item to ready"
+                                >
+                                  {isReverting ? (
+                                    <Loader2 size={10} className="animate-spin" />
+                                  ) : (
+                                    "Undo"
+                                  )}
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <span className="font-bold text-zinc-800 dark:text-zinc-300">
-                            ₹{item.price * item.qty}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -791,15 +1159,63 @@ export default function WaiterClient() {
                 {/* Billing Summary Total */}
                 {billGrandTotal > 0 && (
                   <div className="pt-3.5 border-t border-black/[0.06] dark:border-zinc-850 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-450">Bill Grand Total</span>
-                    <span className="text-base font-black text-[#FF6A00]">₹{billGrandTotal}</span>
+                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-450">
+                      Bill Grand Total
+                    </span>
+                    <span className="text-base font-black text-[#FF6A00]">
+                      ₹{billGrandTotal}
+                    </span>
                   </div>
                 )}
+
+                {/* Payment Tracking Metadata */}
+                <div className="space-y-3 pt-3 border-t border-black/[0.06] dark:border-zinc-850">
+                  <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-505 uppercase tracking-widest">
+                    Payment Collection Details
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
+                        Collected By (Waiter)
+                      </label>
+                      <input
+                        type="text"
+                        value={waiterName}
+                        onChange={(e) => setWaiterName(e.target.value)}
+                        placeholder="Enter waiter name"
+                        className="w-full h-8 px-2.5 rounded border border-black/[0.08] dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#FF6A00]"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
+                        Payment Method
+                      </label>
+                      <div className="flex gap-1 h-8">
+                        {["Cash", "UPI", "Card"].map((method) => (
+                          <button
+                            key={method}
+                            type="button"
+                            onClick={() => setPaymentMethod(method)}
+                            className={`flex-1 rounded border text-[10px] font-black transition-all cursor-pointer ${
+                              paymentMethod === method
+                                ? "bg-[#0A0A0F] text-white border-transparent dark:bg-zinc-100 dark:text-zinc-955"
+                                : "bg-white dark:bg-zinc-800 border-black/[0.08] dark:border-zinc-700 text-zinc-550 dark:text-zinc-450 hover:bg-zinc-50 dark:hover:bg-zinc-750"
+                            }`}
+                          >
+                            {method}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* checkout CTA actions */}
                 <div className="pt-3 border-t border-black/[0.05] dark:border-zinc-855 space-y-2">
                   <button
-                    onClick={() => handlePrintSlip(activeTableSession, activeTableOrders)}
+                    onClick={() =>
+                      handlePrintSlip(activeTableSession, activeTableOrders)
+                    }
                     disabled={billGrandTotal === 0}
                     className="w-full h-10 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-[11px] font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50 text-zinc-650 dark:text-zinc-300"
                   >
@@ -808,7 +1224,12 @@ export default function WaiterClient() {
                   </button>
 
                   <button
-                    onClick={() => handleCheckoutSession(activeTableSession, activeTableOrders)}
+                    onClick={() =>
+                      handleCheckoutSession(
+                        activeTableSession,
+                        activeTableOrders,
+                      )
+                    }
                     disabled={checkoutLoading || billGrandTotal === 0}
                     className="w-full h-11 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
                   >
@@ -824,9 +1245,12 @@ export default function WaiterClient() {
             ) : (
               <div className="py-8 text-center text-zinc-400 space-y-2">
                 <UtensilsCrossed size={28} className="mx-auto text-zinc-200" />
-                <p className="text-xs font-bold text-zinc-500">Table is vacant</p>
+                <p className="text-xs font-bold text-zinc-500">
+                  Table is vacant
+                </p>
                 <p className="text-[10px] text-zinc-400/80 leading-relaxed px-2">
-                  Guest scanning table QR and waiter approvals will trigger ordering sessions.
+                  Guest scanning table QR and waiter approvals will trigger
+                  ordering sessions.
                 </p>
               </div>
             )}
@@ -843,7 +1267,9 @@ export default function WaiterClient() {
           maxWidth="max-w-sm"
         >
           <div className="space-y-4 pt-2">
-            <p className="text-xs text-zinc-500 font-semibold leading-relaxed">{confirmAction.message}</p>
+            <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
+              {confirmAction.message}
+            </p>
             <div className="flex items-center gap-3 pt-2">
               <Button
                 variant="outline"

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { getShopInquiries, updateInquiryStatus, updateInquiryItems } from "../../lib/db";
-import { MessageSquare, Phone, Calendar, Loader2, ShoppingBag, CheckCircle2, Clock, Check, X, FileText, Printer, Download, Eye, Mail, Search, Plus, Trash2 } from "lucide-react";
+import { MessageSquare, Phone, Calendar, Loader2, ShoppingBag, Check, FileText, Printer, Download, Mail, Search, Plus, Trash2 } from "lucide-react";
 import Button from "../UI/Button";
 import Dialog from "../UI/Dialog";
 

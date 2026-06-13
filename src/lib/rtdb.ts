@@ -35,6 +35,7 @@ export interface Session {
   customerName: string;
   customerPhone?: string;
   guests?: Record<string, SessionGuest>;
+  guestCount?: number;
   status: 'pending' | 'active' | 'closed' | 'rejected';
   createdAt: number;
   closedAt?: number;
@@ -136,7 +137,7 @@ export async function getTableName(shopId: string, tableId: string): Promise<str
   return snap.val().name || `Table ${tableId}`;
 }
 
-export async function createSession(shopId: string, tableId: string, tableName: string, requireApproval: boolean, customerName = "", customerPhone = "", customerId = "") {
+export async function createSession(shopId: string, tableId: string, tableName: string, requireApproval: boolean, customerName = "", customerPhone = "", customerId = "", guestCount = 1) {
   const sessRef = push(ref(rtdb, `qr_sessions/${shopId}`));
   const sessionId = sessRef.key!;
 
@@ -157,6 +158,7 @@ export async function createSession(shopId: string, tableId: string, tableName: 
     customerName,
     customerPhone,
     guests,
+    guestCount: Number(guestCount) || 1,
     status: requireApproval ? "pending" : "active",
     createdAt: Date.now(),
   });
@@ -252,7 +254,17 @@ export async function approveSession(shopId: string, sessionId: string, tableId:
   }
 }
 
-export async function closeSession(shopId: string, sessionId: string, tableId: string) {
+export async function closeSession(
+  shopId: string,
+  sessionId: string,
+  tableId: string,
+  checkoutData?: {
+    collectedBy?: string;
+    paymentMethod?: string;
+    billAmount?: number;
+    items?: any[];
+  }
+) {
   let isPending = false;
   try {
     const sessionSnap = await get(ref(rtdb, `qr_sessions/${shopId}/${sessionId}`));
@@ -264,10 +276,19 @@ export async function closeSession(shopId: string, sessionId: string, tableId: s
     console.error("Error checking session status before close:", e);
   }
 
-  await update(ref(rtdb, `qr_sessions/${shopId}/${sessionId}`), {
+  const updateData: any = {
     status: isPending ? "rejected" : "closed",
     closedAt: Date.now(),
-  });
+  };
+
+  if (checkoutData) {
+    if (checkoutData.collectedBy !== undefined) updateData.collectedBy = checkoutData.collectedBy;
+    if (checkoutData.paymentMethod !== undefined) updateData.paymentMethod = checkoutData.paymentMethod;
+    if (checkoutData.billAmount !== undefined) updateData.billAmount = checkoutData.billAmount;
+    if (checkoutData.items !== undefined) updateData.items = checkoutData.items;
+  }
+
+  await update(ref(rtdb, `qr_sessions/${shopId}/${sessionId}`), updateData);
 
   let nextSessionId: string | null = null;
   try {

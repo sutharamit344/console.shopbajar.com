@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link, useLocation, useSearchParams, useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useShopOwner } from "../../hooks/useShopOwner";
@@ -20,9 +20,14 @@ import {
   LogOut,
   ArrowLeft,
   Loader2,
-  CircleAlert
+  CircleAlert,
+  Search,
+  ChevronDown,
+  Store
 } from "lucide-react";
 import Button from "../UI/Button";
+import CommandPalette from "../UI/CommandPalette";
+
 
 const VIEW_LABELS: Record<string, string> = {
   overview: "Overview & Analytics",
@@ -49,10 +54,44 @@ export default function DashboardLayout() {
   // Mobile drawer state
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
+  // Command Palette state
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // User dropdown menu state
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close user menu on route change or when clicking outside
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [location]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Close mobile drawer on route change
   useEffect(() => {
     setIsMobileOpen(false);
   }, [location]);
+
+  // Global keydown handler for Ctrl+K / Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setIsCommandPaletteOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Update document.title per route/view
   useEffect(() => {
@@ -160,6 +199,12 @@ export default function DashboardLayout() {
       icon: Users,
       path: `/waiter?shopId=${shopId}`,
     },
+    ...(hasBilling ? [{
+      id: "billing",
+      label: "Billing & POS",
+      icon: Calculator,
+      path: `/manage?id=${shopId}&view=billing`,
+    }] : []),
   ];
 
   const managementGroup = [
@@ -199,27 +244,21 @@ export default function DashboardLayout() {
       icon: Settings2,
       path: `/manage?id=${shopId}&view=settings`,
     },
-  ];
-
-  const growthGroup = [
-    ...(hasBilling ? [{
-      id: "billing",
-      label: "Billing & POS",
-      icon: Calculator,
-      path: `/manage?id=${shopId}&view=billing`,
-    }] : []),
-    ...(hasInquiries ? [{
-      id: "inquiries",
-      label: "Customer Inquiries",
-      icon: MessageSquare,
-      path: `/manage?id=${shopId}&view=inquiries`,
-    }] : []),
     {
       id: "features",
       label: "Paid Features",
       icon: Sparkles,
       path: `/manage?id=${shopId}&view=features`,
     },
+  ];
+
+  const growthGroup = [
+    ...(hasInquiries ? [{
+      id: "inquiries",
+      label: "Customer Inquiries",
+      icon: MessageSquare,
+      path: `/manage?id=${shopId}&view=inquiries`,
+    }] : []),
   ];
 
   // Helper to check if a navigation item is active
@@ -334,7 +373,7 @@ export default function DashboardLayout() {
 
           {/* Middle: Desktop Module Switcher */}
           <nav className="hidden md:flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 p-1 rounded-lg border border-zinc-200/40 dark:border-zinc-800/80">
-            {hasQrOrdering && (
+            {(hasQrOrdering || hasBilling) && (
               <button
                 onClick={() => handleGroupClick("operations")}
                 className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
@@ -373,31 +412,113 @@ export default function DashboardLayout() {
             
             {/* Desktop User Info & Sign Out */}
             <div className="hidden md:flex items-center gap-2.5">
-              <div className="flex items-center gap-2 px-2.5 py-1 bg-zinc-50 dark:bg-zinc-800/40 rounded-md border border-zinc-200/50 dark:border-zinc-800/80">
-                <div className="w-5.5 h-5.5 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-300">
-                  {user?.photoURL ? (
-                    <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
-                  )}
-                </div>
-                <span className="text-[10px] font-bold text-zinc-650 dark:text-zinc-350 truncate max-w-[100px]">
-                  {user?.displayName || "Merchant"}
-                </span>
-              </div>
-
+              {/* Search Trigger (Command Palette) */}
               <button
-                onClick={logout}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 border border-transparent hover:border-red-100 dark:hover:border-red-950/40 rounded-md transition-all cursor-pointer"
-                title="Sign Out"
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="flex items-center gap-2 px-2.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-350 transition-colors cursor-pointer"
+                title="Search or type a command (⌘K)"
               >
-                <LogOut size={14} className="shrink-0" />
-                <span>Sign Out</span>
+                <Search size={12} className="shrink-0 text-zinc-400 dark:text-zinc-500" />
+                <span>Search...</span>
+                <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-250/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
+                  ⌘K
+                </kbd>
               </button>
+
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                  className="flex items-center gap-2 px-2.5 py-1 bg-zinc-50 hover:bg-zinc-100/80 dark:bg-zinc-800/40 dark:hover:bg-zinc-800/80 rounded-md border border-zinc-200/50 dark:border-zinc-800/80 cursor-pointer select-none transition-all duration-200 focus:outline-hidden"
+                  aria-expanded={isUserMenuOpen}
+                  aria-haspopup="true"
+                >
+                  <div className="w-5.5 h-5.5 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-300">
+                    {user?.photoURL ? (
+                      <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    ) : (
+                      <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-bold text-zinc-650 dark:text-zinc-350 truncate max-w-[100px]">
+                    {user?.displayName || "Merchant"}
+                  </span>
+                  <ChevronDown
+                    size={12}
+                    className={`text-zinc-400 dark:text-zinc-500 transition-transform duration-200 shrink-0 ${
+                      isUserMenuOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {isUserMenuOpen && (
+                  <div className="absolute right-0 mt-1.5 w-56 rounded-lg border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-zinc-900 shadow-md py-1.5 z-50 animate-in fade-in-50 slide-in-from-top-1 duration-150 origin-top-right">
+                    {/* User Header */}
+                    <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800/80">
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                        {user?.displayName || "Merchant"}
+                      </p>
+                      <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                        {user?.email}
+                      </p>
+                    </div>
+
+                    {/* Navigation Actions */}
+                    <div className="p-1">
+                      <Link
+                        to="/dashboard"
+                        onClick={() => setIsUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors"
+                      >
+                        <Store size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
+                        <span>All Businesses</span>
+                      </Link>
+
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          setIsCommandPaletteOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer text-left"
+                      >
+                        <Search size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
+                        <span className="flex-1">Command Palette</span>
+                        <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-205/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
+                          ⌘K
+                        </kbd>
+                      </button>
+                    </div>
+
+                    <div className="border-t border-zinc-100 dark:border-zinc-800/80 my-1" />
+
+                    {/* Logout Action */}
+                    <div className="p-1">
+                      <button
+                        onClick={() => {
+                          setIsUserMenuOpen(false);
+                          logout();
+                        }}
+                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 transition-all cursor-pointer text-left"
+                      >
+                        <LogOut size={13} className="shrink-0" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Mobile Header Bar Details */}
             <div className="flex items-center gap-2 md:hidden">
+              {/* Mobile Command Palette Trigger */}
+              <button
+                onClick={() => setIsCommandPaletteOpen(true)}
+                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                title="Search / Actions"
+              >
+                <Search size={18} />
+              </button>
+
               {/* Hamburger Toggle */}
               <button
                 onClick={() => setIsMobileOpen(true)}
@@ -493,7 +614,7 @@ export default function DashboardLayout() {
 
           {/* Drawer Body (Scrollable lists) */}
           <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
-            {hasQrOrdering && renderMobileNavGroup("Real-Time Operations", operationsGroup)}
+            {(hasQrOrdering || hasBilling) && renderMobileNavGroup("Real-Time Operations", operationsGroup)}
             {renderMobileNavGroup("Management Suite", managementGroup)}
             {renderMobileNavGroup("Growth & Billing", growthGroup)}
           </div>
@@ -535,6 +656,13 @@ export default function DashboardLayout() {
       <main className="flex-1 w-full overflow-y-auto">
         <Outlet />
       </main>
+
+      {/* Global Command Palette */}
+      <CommandPalette
+        isOpen={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        shop={shop}
+      />
 
     </div>
   );

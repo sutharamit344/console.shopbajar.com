@@ -23,7 +23,7 @@ import Select from "../UI/Select";
 import Textarea from "../UI/Textarea";
 import Button from "../UI/Button";
 import Dialog from "../UI/Dialog";
-import { MAIN_APP_URL } from "../../lib/config";
+import { getCustomerAppUrl } from "../../lib/config";
 
 interface CatalogImageProps {
   src?: string;
@@ -137,7 +137,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
         type: "error",
       });
       const directUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(
-        MAIN_APP_URL + "/shop/" + slugify(shop?.slug || shop?.name || "") + "/catalog"
+        getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`)
       )}&color=0A0A0F&bgcolor=FFFFFF`;
       window.open(directUrl, "_blank");
     } finally {
@@ -147,13 +147,13 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
 
   const handleDownloadMenuQR = () => {
     const directUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(
-      MAIN_APP_URL + "/shop/" + slugify(shop?.slug || shop?.name || "") + "/catalog"
+      getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`)
     )}&color=0A0A0F&bgcolor=FFFFFF`;
     window.open(directUrl, "_blank");
   };
 
   const handleCopyMenuLink = () => {
-    const url = `${MAIN_APP_URL}/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`;
+    const url = getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`);
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -686,7 +686,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                                 )}
                               </div>
                               {/* Hover actions panel */}
-                              <div className="flex gap-1.5 mt-1 border-t border-zinc-50 dark:border-zinc-900 pt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex gap-1.5 mt-1 border-t border-zinc-50 dark:border-zinc-900 pt-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => {
                                     setActiveCategoryIdx(idx);
@@ -725,7 +725,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                     </div>
                   ) : (
                     /* List View */
-                    <div className="p-3 grid grid-cols-1 md:grid-cols-2 gap-2 animate-in slide-in-from-top-2 duration-200">
+                    <div className="p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 animate-in slide-in-from-top-2 duration-200">
                       {category.items?.map((item: any) => {
                         const iIdx = item.originalIdx;
                         return (
@@ -771,7 +771,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                                 )}
                               </div>
                             </div>
-                            <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex gap-1 shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                               <button
                                 onClick={() => {
                                   setActiveCategoryIdx(idx);
@@ -855,7 +855,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
             <div className="w-44 h-44 flex items-center justify-center bg-white">
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                  MAIN_APP_URL + "/shop/" + slugify(shop?.slug || shop?.name || "") + "/catalog"
+                  getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`)
                 )}&color=0A0A0F&bgcolor=FFFFFF`}
                 alt="Menu QR"
                 className="w-full h-full object-contain"
@@ -872,7 +872,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                 Direct Menu Link
               </span>
               <span className="text-xs font-semibold text-zinc-650 dark:text-zinc-400 truncate block leading-none font-mono">
-                {MAIN_APP_URL}/shop/{slugify(shop?.slug || shop?.name || "")}/catalog
+                {getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`)}
               </span>
             </div>
 
@@ -955,7 +955,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               <div className="p-6 bg-white rounded-2xl shadow-xl border border-zinc-200/60 relative flex items-center justify-center">
                 <img
                   src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
-                    MAIN_APP_URL + "/shop/" + slugify(shop?.slug || shop?.name || "") + "/catalog"
+                    getCustomerAppUrl(`/shop/${slugify(shop?.slug || shop?.name || "")}/catalog`)
                   )}&color=0A0A0F&bgcolor=FFFFFF`}
                   alt="Menu QR"
                   className="w-48 h-48 object-contain"

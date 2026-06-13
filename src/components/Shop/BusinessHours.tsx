@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Plus, X, CalendarDays, Clock } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useSelector, useDispatch } from "react-redux";
 import { AppDispatch } from "../../redux/store";
 import {

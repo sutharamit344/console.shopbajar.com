@@ -19,8 +19,13 @@ export default function PortalBillingView() {
     return (
       <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center space-y-4 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 p-8 rounded-md shadow-sm">
-          <Store size={40} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
-          <p className="text-[14px] font-bold text-zinc-900 dark:text-zinc-100">{error || "No shop found."}</p>
+          <Store
+            size={40}
+            className="mx-auto text-zinc-300 dark:text-zinc-600 mb-4"
+          />
+          <p className="text-[14px] font-bold text-zinc-900 dark:text-zinc-100">
+            {error || "No shop found."}
+          </p>
         </div>
       </div>
     );
@@ -28,19 +33,21 @@ export default function PortalBillingView() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 text-zinc-900 dark:text-zinc-150 transition-colors duration-200 pb-12">
-      <div className="w-full px-4 md:px-6 py-6 max-w-7xl mx-auto">
-        
+      <div className="w-full px-4 md:px-8 py-4">
         {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-3.5 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-6 mb-4 shadow-2xs transition-all">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link to={`/portal/tables?shopId=${shop.id}`} className="w-8 h-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 transition-colors shadow-sm shrink-0" title="Back to Seating Map">
-              <ArrowLeft size={15} />
+        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Link
+              to={`/portal/tables?shopId=${shop.id}`}
+              className="w-7 h-7 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 transition-colors shadow-sm shrink-0"
+              title="Back to Seating Map"
+            >
+              <ArrowLeft size={13} />
             </Link>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-sm sm:text-[16px] font-bold text-[#0A0A0F] dark:text-zinc-100 tracking-tight leading-none truncate">Billing & POS Portal</h1>
-              </div>
-              <p className="text-[10.5px] text-[#0A0A0F]/40 dark:text-zinc-400 font-medium mt-1 truncate">{shop.name}</p>
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
+              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                {shop.name}
+              </span>
             </div>
           </div>
 
@@ -69,7 +76,7 @@ export default function PortalBillingView() {
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full">
           <BillingPosTab shop={shop} />
         </div>
       </div>

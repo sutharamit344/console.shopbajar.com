@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { slugify } from "../../lib/slugify";
 import { uploadImage } from "../../lib/storage";
-import { proposeCategory, proposeCluster } from "../../lib/db";
+import { proposeCategory, proposeCluster, isSlugAvailable } from "../../lib/db";
 import ImageUpload from "../UI/ImageUpload";
 import Input from "../UI/Input";
 import Select from "../UI/Select";
@@ -118,6 +118,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
     secondaryColor: "#0A0A0F",
     rating: "5.0",
     logo: "",
+    slug: "",
     businessType: "mixed",
     shopNo: "",
     building: "",
@@ -133,6 +134,8 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
     },
     staffPin: "1234",
   });
+
+  const [slugStatus, setSlugStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState("");
@@ -179,6 +182,33 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
       }
     }
   }, [initialData, masterCategories]);
+
+  // Debounced slug availability check
+  useEffect(() => {
+    if (!formData.slug || formData.slug.trim() === "") {
+      setSlugStatus("idle");
+      return;
+    }
+
+    const cleanSlug = formData.slug.trim().toLowerCase();
+    if (!/^[a-z0-9-]+$/.test(cleanSlug)) {
+      setSlugStatus("invalid");
+      return;
+    }
+
+    setSlugStatus("checking");
+
+    const timer = setTimeout(async () => {
+      const isAvailable = await isSlugAvailable(cleanSlug, initialData?.id || null);
+      if (isAvailable) {
+        setSlugStatus("available");
+      } else {
+        setSlugStatus("taken");
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [formData.slug, initialData]);
 
   // Check for custom cluster once master data loads
   useEffect(() => {
@@ -292,6 +322,12 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
     }
     if (name === "clusterType") {
       setShowCustomCluster(value === "CUSTOM");
+    }
+
+    if (name === "slug") {
+      const cleanSlug = value.toLowerCase().replace(/[^a-z0-9-]/g, "");
+      setFormData((prev: any) => ({ ...prev, slug: cleanSlug }));
+      return;
     }
 
     setFormData((prev: any) => ({ ...prev, [name]: value }));
@@ -539,6 +575,23 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
       return false;
     }
 
+    if (!formData.slug || formData.slug.trim() === "") {
+      setLocalError("Shop URL slug is required.");
+      return false;
+    }
+    if (slugStatus === "taken") {
+      setLocalError("This shop URL is already taken. Please choose another one.");
+      return false;
+    }
+    if (slugStatus === "invalid") {
+      setLocalError("Invalid URL slug. Only lowercase letters, numbers, and hyphens are allowed.");
+      return false;
+    }
+    if (slugStatus === "checking") {
+      setLocalError("Checking URL availability... Please wait.");
+      return false;
+    }
+
     setLocalError(null);
     return true;
   };
@@ -554,7 +607,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
     setUploadStatus("Processing uploads...");
 
     try {
-      const slug = slugify(formData.name);
+      const slug = formData.slug || slugify(formData.name);
       const timestamp = Date.now();
 
       let logoUrl = formData.logo || "";
@@ -643,7 +696,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
   const displayError = externalError || localError;
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 w-full">
+    <form onSubmit={handleSubmit} className="space-y-4 w-full">
       {/* ── ERROR DISPLAY ── */}
       {displayError && (
         <div className="bg-red-50 rounded-md p-4 flex items-start gap-4 border border-red-100 animate-in shake duration-300 dark:bg-red-500/10 dark:border-red-500/20 shadow-sm">
@@ -666,9 +719,9 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         ref={(el) => {
           if (sectionRefs?.current) sectionRefs.current["identity"] = el;
         }}
-        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-6 shadow-sm space-y-6 scroll-mt-24"
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
       >
-        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-3">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
           <div className="w-10 h-10 rounded-md bg-[#FF6A00]/10 flex items-center justify-center text-[#FF6A00]">
             <Store size={20} />
           </div>
@@ -683,7 +736,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         </div>
 
         {/* Image Upload Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
           <div>
             <ImageUpload
               onSelect={(file) => {
@@ -691,7 +744,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
                 setLogoPreview(file ? URL.createObjectURL(file) : "");
               }}
               currentImage={logoPreview}
-              className="w-full h-32"
+              className="w-full h-28"
               label="Store Logo"
             />
           </div>
@@ -702,63 +755,83 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
                 setCoverFile(file);
                 setCoverPreview(file ? URL.createObjectURL(file) : "");
               }}
-              className="w-full h-32"
+              className="w-full h-28"
               currentImage={coverPreview}
               helpText="Recommended size: 1200x400. Appears as banner on profile."
             />
           </div>
         </div>
 
-        {/* Business Name & Categorization Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-          <div className="md:col-span-1">
+        {/* Business Name & Custom URL Slug Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <Input
+            label="Business Name"
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="e.g., Sharma Premium Groceries"
+            required
+          />
+          
+          <div className="space-y-1">
             <Input
-              label="Business Name"
-              name="name"
-              value={formData.name}
+              label="Custom Shop URL"
+              name="slug"
+              value={formData.slug}
               onChange={handleChange}
-              placeholder="e.g., Sharma Premium Groceries"
+              placeholder="sharma-premium-groceries"
               required
-              helpText="This will define your unique ShopBajar URL"
+              helpText={
+                slugStatus === "checking" ? (
+                  <span className="text-zinc-555 flex items-center gap-1.5"><Loader2 className="animate-spin text-[#FF6A00]" size={12} /> Checking availability...</span>
+                ) : slugStatus === "available" ? (
+                  <span className="text-emerald-600 font-semibold flex items-center gap-1">✓ URL is available</span>
+                ) : slugStatus === "taken" ? (
+                  <span className="text-red-500 font-semibold flex items-center gap-1">✗ Already taken by another shop</span>
+                ) : slugStatus === "invalid" ? (
+                  <span className="text-amber-600 flex items-center gap-1">⚠ Only lowercase letters, numbers, and hyphens allowed</span>
+                ) : (
+                  "Only lowercase letters, numbers, and hyphens allowed"
+                )
+              }
             />
           </div>
+        </div>
 
-          <div className="md:col-span-1 space-y-3">
-            <HybridSelect
-              label="Market Category"
-              name="category"
-              value={formData.category}
-              onChange={handleHybridChange}
-              required
-              options={[
-                { value: "", label: "Select a category", disabled: true },
-                ...dbCategories.map((c) => ({ value: c, label: c })),
-                { value: "OTHER_PROPOSE", label: "➕ Propose new category..." },
-              ]}
-              showInput={showNewCategoryInput}
-              onToggleInput={setShowNewCategoryInput}
-              inputName="proposedCategory"
-              inputValue={proposedCategory}
-              onInputChange={(e) => setProposedCategory(e.target.value)}
-              inputPlaceholder="e.g., Organic Lifestyle"
-              inputHelpText="We will review and add this to our directory"
-            />
-          </div>
+        {/* Categorization & Service Model Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <HybridSelect
+            label="Market Category"
+            name="category"
+            value={formData.category}
+            onChange={handleHybridChange}
+            required
+            options={[
+              { value: "", label: "Select a category", disabled: true },
+              ...dbCategories.map((c) => ({ value: c, label: c })),
+              { value: "OTHER_PROPOSE", label: "➕ Propose new category..." },
+            ]}
+            showInput={showNewCategoryInput}
+            onToggleInput={setShowNewCategoryInput}
+            inputName="proposedCategory"
+            inputValue={proposedCategory}
+            onInputChange={(e) => setProposedCategory(e.target.value)}
+            inputPlaceholder="e.g., Organic Lifestyle"
+            inputHelpText="We will review and add this to our directory"
+          />
 
-          <div className="md:col-span-1">
-            <Select
-              label="Service Model"
-              name="businessType"
-              value={formData.businessType}
-              onChange={handleChange}
-              required
-              options={[
-                { value: "product", label: "Product Based (Retail, Grocery)" },
-                { value: "service", label: "Service Based (Salon, Repair)" },
-                { value: "mixed", label: "Hybrid (Both Products & Services)" },
-              ]}
-            />
-          </div>
+          <Select
+            label="Service Model"
+            name="businessType"
+            value={formData.businessType}
+            onChange={handleChange}
+            required
+            options={[
+              { value: "product", label: "Product Based (Retail, Grocery)" },
+              { value: "service", label: "Service Based (Salon, Repair)" },
+              { value: "mixed", label: "Hybrid (Both Products & Services)" },
+            ]}
+          />
         </div>
 
         {/* Store Description */}
@@ -769,7 +842,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
           onChange={handleChange}
           placeholder="What makes your store unique? Mention your best-sellers or specialties..."
           required
-          rows={3}
+          rows={2}
           helpText="A brief overview of your business for search results."
         />
       </div>
@@ -779,9 +852,9 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         ref={(el) => {
           if (sectionRefs?.current) sectionRefs.current["location"] = el;
         }}
-        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-6 shadow-sm space-y-6 scroll-mt-24"
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
       >
-        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-3">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
           <div className="w-10 h-10 rounded-md bg-blue-500/10 flex items-center justify-center text-blue-500">
             <MapIcon size={20} />
           </div>
@@ -986,9 +1059,9 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         ref={(el) => {
           if (sectionRefs?.current) sectionRefs.current["contact"] = el;
         }}
-        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-6 shadow-sm space-y-6 scroll-mt-24"
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
       >
-        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-3">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
           <div className="w-10 h-10 rounded-md bg-emerald-500/10 flex items-center justify-center text-emerald-500">
             <Phone size={20} />
           </div>
@@ -1002,7 +1075,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
           <Input
             label="WhatsApp For Business"
             name="phone"
@@ -1044,9 +1117,9 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         ref={(el) => {
           if (sectionRefs?.current) sectionRefs.current["social"] = el;
         }}
-        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-6 shadow-sm space-y-6 scroll-mt-24"
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
       >
-        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-3">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
           <div className="w-10 h-10 rounded-md bg-pink-500/10 flex items-center justify-center text-pink-500">
             <Share2 size={20} />
           </div>
@@ -1119,9 +1192,9 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
         ref={(el) => {
           if (sectionRefs?.current) sectionRefs.current["seo"] = el;
         }}
-        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-6 shadow-sm space-y-6 scroll-mt-24"
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
       >
-        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-4 flex items-center gap-3">
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
           <div className="w-10 h-10 rounded-md bg-purple-500/10 flex items-center justify-center text-purple-500">
             <Globe size={20} />
           </div>
@@ -1135,7 +1208,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200/80 dark:border-zinc-700/80 rounded-md space-y-3 shadow-sm flex flex-col justify-center">
             <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
               <LinkIcon size={12} />
@@ -1170,7 +1243,7 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
       </div>
 
       {/* Save Action Bar */}
-      <div className="flex items-center justify-end gap-4 pt-4 sticky bottom-6 z-40 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-4 rounded-md border border-zinc-200/80 dark:border-zinc-800 shadow-lg">
+      <div className="flex items-center justify-end gap-3 pt-3 sticky bottom-2 z-40 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md p-3 rounded-md border border-zinc-200/80 dark:border-zinc-800 shadow-lg">
         <Button
           type="submit"
           variant="primary"

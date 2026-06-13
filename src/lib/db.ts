@@ -643,5 +643,30 @@ export async function getAreas(): Promise<any[]> {
   }
 }
 
+/**
+ * Checks if a shop slug is available. Excludes the current shop ID when editing.
+ */
+export async function isSlugAvailable(slug: string, currentShopId?: string | null): Promise<boolean> {
+  if (!slug || slug.trim() === "") return false;
+  try {
+    const cleanSlug = slug.trim().toLowerCase();
+    const q = query(
+      collection(db, COLLECTION_NAME),
+      where("slug", "==", cleanSlug)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return true;
+    if (currentShopId) {
+      const otherMatches = snap.docs.filter((doc) => doc.id !== currentShopId);
+      return otherMatches.length === 0;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error checking slug availability: ", error);
+    return false;
+  }
+}
+
+
 
 

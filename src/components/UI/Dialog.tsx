@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-react";
 interface DialogProps {
   isOpen: boolean;
   onClose: () => void;
-  title: string;
+  title?: string;
   subtitle?: string;
   children: React.ReactNode;
   icon?: LucideIcon;

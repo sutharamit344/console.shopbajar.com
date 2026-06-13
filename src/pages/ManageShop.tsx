@@ -153,6 +153,7 @@ export default function ManageShop() {
       case "reviews":
         return (
           <CustomerReviews
+            shop={shop}
             shopId={shop.id}
             avgRating={shop.avgRating || "5.0"}
             onShowAlert={showAlert}
@@ -197,23 +198,8 @@ export default function ManageShop() {
   }
 
   return (
-    <div className="w-full px-4 md:px-6 py-6 max-w-6xl mx-auto space-y-6">
-      {/* Header Info */}
-      <div className="border-b border-zinc-150 dark:border-zinc-800 pb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#FF6A00]/5 dark:bg-[#FF6A00]/10 text-[#FF6A00] rounded border border-[#FF6A00]/15 mb-1 text-[9px] font-bold uppercase tracking-widest font-mono">
-            Backoffice Management
-          </div>
-          <h1 className="text-lg md:text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
-            {VIEW_LABELS[activeView] || activeView}
-          </h1>
-          {shop?.name && (
-            <p className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 mt-0.5">
-              {shop.name}
-            </p>
-          )}
-        </div>
-      </div>
+    <div className="w-full px-4 md:px-8 py-4 space-y-4">
+
 
       {/* Dynamic Sub-tab Panel */}
       <div className="w-full">
