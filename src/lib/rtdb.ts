@@ -10,60 +10,8 @@ import {
   off,
 } from "firebase/database";
 
-export interface Table {
-  id: string;
-  name: string;
-  capacity: number;
-  shape: string;
-  active: boolean;
-  currentSessionId?: string | null;
-  mergedInto?: string | null;
-  createdAt: number;
-}
-
-export interface SessionGuest {
-  name: string;
-  phone?: string;
-  joinedAt: number;
-}
-
-export interface Session {
-  id: string;
-  tableId: string;
-  tableName: string;
-  sessionId: string;
-  customerName: string;
-  customerPhone?: string;
-  guests?: Record<string, SessionGuest>;
-  guestCount?: number;
-  status: 'pending' | 'active' | 'closed' | 'rejected';
-  createdAt: number;
-  closedAt?: number;
-}
-
-export interface OrderItem {
-  name: string;
-  price: number;
-  qty: number;
-  unit?: string;
-  status?: 'placed' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'cancelled';
-}
-
-export interface Order {
-  id: string;
-  sessionId: string;
-  items: OrderItem[];
-  status: 'placed' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'cancelled';
-  note?: string;
-  tableId: string;
-  tableName: string;
-  placedAt: number;
-  confirmedAt?: number;
-  preparingAt?: number;
-  readyAt?: number;
-  servedAt?: number;
-  cancelledAt?: number;
-}
+import { Table, SessionGuest, Session, OrderItem, Order, Booking } from "../types";
+export type { Table, SessionGuest, Session, OrderItem, Order, Booking };
 
 // ─── TABLE MANAGEMENT ────────────────────────────────────────────
 
@@ -74,7 +22,10 @@ export async function getTables(shopId: string): Promise<Table[]> {
   return Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val }));
 }
 
-export async function addTable(shopId: string, { name, capacity = 4, shape = "round" }: { name: string; capacity?: number | string; shape?: string }) {
+export async function addTable(
+  shopId: string, 
+  { name, capacity = 4, shape = "round", bookingPrice = 0 }: { name: string; capacity?: number | string; shape?: string; bookingPrice?: number | string }
+) {
   const tableRef = push(ref(rtdb, `qr_tables/${shopId}`));
   await set(tableRef, {
     name,
@@ -83,6 +34,7 @@ export async function addTable(shopId: string, { name, capacity = 4, shape = "ro
     active: true,
     currentSessionId: null,
     createdAt: Date.now(),
+    bookingPrice: Number(bookingPrice) || 0,
   });
   return tableRef.key;
 }
@@ -225,6 +177,52 @@ export async function updateSessionStatus(shopId: string, sessionId: string, sta
 
 export async function approveSession(shopId: string, sessionId: string, tableId: string) {
   await update(ref(rtdb, `qr_sessions/${shopId}/${sessionId}`), { status: "active" });
+
+  try {
+    const sessionSnap = await get(ref(rtdb, `qr_sessions/${shopId}/${sessionId}`));
+    if (sessionSnap.exists()) {
+      const sessionVal = sessionSnap.val();
+      const customerPhone = sessionVal.customerPhone;
+      const sessionTableId = sessionVal.tableId || tableId;
+
+      const bookingsSnap = await get(ref(rtdb, `qr_bookings/${shopId}`));
+      if (bookingsSnap.exists()) {
+        const bookingsVal = bookingsSnap.val();
+        let matchedBookingId: string | null = null;
+
+        for (const [bId, booking] of Object.entries<any>(bookingsVal)) {
+          if (booking.status === "seated" || booking.status === "cancelled") {
+            continue;
+          }
+
+          if (customerPhone && booking.customerPhone &&
+              customerPhone.trim().replace(/\D/g, "") === booking.customerPhone.trim().replace(/\D/g, "")) {
+            matchedBookingId = bId;
+            break;
+          }
+
+          const todayStr = new Date().toISOString().split("T")[0];
+          if (booking.tableId === sessionTableId && booking.date === todayStr) {
+            matchedBookingId = bId;
+          }
+        }
+
+        if (matchedBookingId) {
+          const matchedBooking = bookingsVal[matchedBookingId];
+          await update(ref(rtdb, `qr_bookings/${shopId}/${matchedBookingId}`), {
+            status: 'seated',
+            tableId: sessionTableId,
+            tableName: sessionVal.tableName || matchedBooking.tableName || "",
+            sessionId: sessionId,
+            seatedAt: Date.now(),
+            updatedAt: Date.now(),
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Error auto-seating booking on session approval:", err);
+  }
 
   try {
     const tableSnap = await get(ref(rtdb, `qr_tables/${shopId}/${tableId}`));
@@ -429,3 +427,85 @@ export function listenAllOrders(shopId: string, callback: (orders: Order[]) => v
   onValue(r, handler);
   return () => off(r, "value", handler);
 }
+
+export async function getSessionOrders(shopId: string, sessionId: string): Promise<Order[]> {
+  const snap = await get(ref(rtdb, `qr_orders/${shopId}/${sessionId}`));
+  if (!snap.exists()) return [];
+  const data = snap.val();
+  const allOrders: Order[] = [];
+  Object.entries(data).forEach(([orderId, order]: [string, any]) => {
+    allOrders.push({ id: orderId, sessionId, ...order });
+  });
+  return allOrders;
+}
+
+// ─── TABLE BOOKING MANAGEMENT ─────────────────────────────────────
+
+
+
+export async function createBooking(shopId: string, data: Omit<Booking, 'id' | 'status' | 'createdAt'>) {
+  const bookingRef = push(ref(rtdb, `qr_bookings/${shopId}`));
+  await set(bookingRef, {
+    ...data,
+    status: 'pending',
+    createdAt: Date.now(),
+  });
+  return bookingRef.key;
+}
+
+export function listenBookings(shopId: string, callback: (bookings: Booking[]) => void) {
+  const r = ref(rtdb, `qr_bookings/${shopId}`);
+  const handler = (snap: any) => {
+    if (!snap.exists()) { callback([]); return; }
+    const data = snap.val();
+    callback(Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val })));
+  };
+  onValue(r, handler);
+  return () => off(r, 'value', handler);
+}
+
+export async function updateBooking(shopId: string, bookingId: string, data: Partial<Booking>) {
+  await update(ref(rtdb, `qr_bookings/${shopId}/${bookingId}`), {
+    ...data,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function confirmBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `qr_bookings/${shopId}/${bookingId}`), {
+    status: 'confirmed',
+    updatedAt: Date.now(),
+  });
+}
+
+export async function rejectBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `qr_bookings/${shopId}/${bookingId}`), {
+    status: 'rejected',
+    updatedAt: Date.now(),
+  });
+}
+
+export async function cancelBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `qr_bookings/${shopId}/${bookingId}`), {
+    status: 'cancelled',
+    updatedAt: Date.now(),
+  });
+}
+
+export async function seatBooking(
+  shopId: string,
+  bookingId: string,
+  tableId: string,
+  tableName: string,
+  sessionId: string
+) {
+  await update(ref(rtdb, `qr_bookings/${shopId}/${bookingId}`), {
+    status: 'seated',
+    tableId,
+    tableName,
+    sessionId,
+    seatedAt: Date.now(),
+    updatedAt: Date.now(),
+  });
+}
+

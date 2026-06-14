@@ -42,3 +42,14 @@ export const selectDashboardError = createSelector(
   [selectDashboardState],
   (dashboard) => dashboard.error
 );
+
+export const selectShopPayments = createSelector(
+  [selectDashboardState],
+  (dashboard) => dashboard.payments || []
+);
+
+export const selectLoadingPayments = createSelector(
+  [selectDashboardState],
+  (dashboard) => dashboard.loadingPayments
+);
+

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   Calculator,
   FileText,
@@ -11,11 +11,14 @@ import {
   Save,
   Search,
   ShoppingBag,
+  Table2,
   Trash2,
   User,
   ChevronRight,
   ChevronLeft,
   CheckCircle,
+  MoreVertical,
+  ChevronDown,
 } from "lucide-react";
 import Button from "../UI/Button";
 import Dialog from "../UI/Dialog";
@@ -65,8 +68,37 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
   const canManageBills = hasInvoiceTools || hasPosSlipTools;
   const storageKey = `billing_pos_draft_${shop?.id || "default"}`;
 
+  // Fullscreen state detection
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
+  // Actions Dropdown Menu State
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const actionsMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        actionsMenuRef.current &&
+        !actionsMenuRef.current.contains(event.target as Node)
+      ) {
+        setActionsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // Wizard and output states
-  const [activeStep, setActiveStep] = useState(1);
   const [docType, setDocType] = useState(hasInvoiceTools ? "invoice" : hasPosSlipTools ? "pos" : "invoice");
 
   const [bill, setBill] = useState(createEmptyBill);
@@ -81,6 +113,7 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
   const [draftLoaded, setDraftLoaded] = useState(false);
+  const [showMoreCustomerFields, setShowMoreCustomerFields] = useState(false);
 
   const menu = shop?.menu;
 
@@ -481,7 +514,6 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
       }
 
       resetBill();
-      setActiveStep(1);
       await loadBills();
     } else {
       setStatusMessage(`Checkout failed: ${result.error}`);
@@ -524,7 +556,6 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
         }))
         : [],
     });
-    setActiveStep(1);
     setManageDialogOpen(false);
     setStatusMessage(`Loaded bill ${savedBill.billNumber} for editing.`);
   };
@@ -769,54 +800,7 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
 
   return (
     <div className="space-y-4 pb-12">
-      <div className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-              Billing & POS Manager
-            </h2>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium mt-1">
-              Create real bills, sync item stock dynamically, search directories, and output invoices or POS slips.
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${hasInvoiceTools ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400" : "bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"}`}>
-                Invoice Engine {hasInvoiceTools ? "On" : "Locked"}
-              </span>
-              <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border ${hasPosSlipTools ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:bg-emerald-500/20 dark:text-emerald-400" : "bg-zinc-100 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-400 dark:border-zinc-700"}`}>
-                POS Slip {hasPosSlipTools ? "On" : "Locked"}
-              </span>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 w-full lg:w-auto justify-start lg:justify-end">
-            {!isPortal && (
-              <button
-                type="button"
-                onClick={() => {
-                  const staffUrl = `${window.location.origin}/portal/billing?shopId=${shop.id}`;
-                  navigator.clipboard.writeText(staffUrl);
-                  alert("Copied Staff Billing & POS Portal Link to clipboard!\nShare this with your staff. PIN: " + (shop.staffPin || "1234"));
-                }}
-                className="h-8 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
-              >
-                <User size={12} className="text-zinc-400" />
-                <span>Share Staff URL</span>
-              </button>
-            )}
-            <Button variant="outline" size="sm" icon={Receipt} disabled={!canManageBills} onClick={() => { setManageDialogOpen(true); clearStatusMessage(); }} className="h-8 text-[11px]">
-              Manage Bills
-            </Button>
-            <Button variant="outline" size="sm" icon={Plus} onClick={() => { resetBill(); setActiveStep(1); }} className="h-8 text-[11px]">
-              New Bill
-            </Button>
-            <Button variant="outline" size="sm" icon={FileText} disabled={!bill.id || !hasInvoiceTools} onClick={() => printInvoiceHelper(bill)} className="h-8 text-[11px]">
-              Print Invoice
-            </Button>
-            <Button variant="outline" size="sm" icon={Printer} disabled={!bill.id || !hasPosSlipTools} onClick={() => printPosSlipHelper(bill)} className="h-8 text-[11px]">
-              Print POS Slip
-            </Button>
-          </div>
-        </div>
-      </div>
+
 
       {statusMessage && (
         <div className="rounded-md border border-[#FF6A00]/20 bg-[#FF6A00]/5 px-4 py-3 text-[11px] font-bold text-[#C85200]">
@@ -834,392 +818,497 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
       )}
 
       {canManageBills && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1.25fr_0.75fr] gap-4 items-start">
-          {/* Left panel: Wizard checkout steps */}
-          <div className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4">
-            
-            {/* Step indicator progress bar */}
-            <div className="flex items-center justify-between border-b border-zinc-200 dark:border-zinc-800 pb-3 mb-4">
+        <div className={`grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-4 select-none ${isFullscreen ? "lg:h-[calc(100vh-2.5rem)]" : "lg:h-[calc(100vh-10rem)]"} lg:overflow-hidden`}>
+          {/* Left Column: Catalog only */}
+          <div className="flex flex-col lg:h-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-md p-4 shadow-sm overflow-hidden">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 shrink-0">
+              <div>
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Catalog Items</h3>
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">Click items to add them to the bill</p>
+              </div>
               <div className="flex items-center gap-2">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${activeStep >= 1 ? "bg-[#FF6A00] text-white" : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"}`}>
-                  1
+                <div className="relative min-w-[180px]">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-450 dark:text-zinc-505" size={12} />
+                  <input
+                    type="text"
+                    placeholder="Search items..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-955 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]/20 focus:border-[#FF6A00] transition-all h-8"
+                  />
                 </div>
-                <span className={`text-xs font-bold ${activeStep === 1 ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-550"}`}>Products & Pricing</span>
-              </div>
-              <div className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1 mx-3" />
-              <div className="flex items-center gap-2">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${activeStep >= 2 ? "bg-[#FF6A00] text-white" : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"}`}>
-                  2
-                </div>
-                <span className={`text-xs font-bold ${activeStep === 2 ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-550"}`}>Customer & Notes</span>
-              </div>
-              <div className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1 mx-3" />
-              <div className="flex items-center gap-2">
-                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${activeStep >= 3 ? "bg-[#FF6A00] text-white" : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"}`}>
-                  3
-                </div>
-                <span className={`text-xs font-bold ${activeStep === 3 ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 dark:text-zinc-550"}`}>Choose & Generate</span>
-              </div>
-            </div>
-
-            {/* STEP 1: Products and Pricing builder */}
-            {activeStep === 1 && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-1">
-                  <div>
-                    <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Catalog Billing Builder</h3>
-                    <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium">Search catalog items or add manual billing lines.</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative min-w-[200px]">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-450 dark:text-zinc-500" size={12} />
-                      <input
-                        type="text"
-                        placeholder="Search items..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]/20 focus:border-[#FF6A00] transition-all h-8"
-                      />
-                    </div>
-                    <Button variant="outline" size="sm" icon={Plus} onClick={addManualItem} className="h-8 text-[11px]">
-                      Manual
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
-                  <div className="max-h-[190px] overflow-y-auto">
-                    <table className="w-full text-xs text-left">
-                      <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-10">
-                        <tr>
-                          <th className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Item Name & Category</th>
-                          <th className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider w-36">Stock Status</th>
-                          <th className="px-3 py-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider text-right w-28">Price</th>
-                          <th className="px-3 py-2 text-center w-12"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {filteredCatalogItems.length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-4 py-8 text-center text-[11px] text-zinc-505 dark:text-zinc-400 font-medium bg-white dark:bg-zinc-950">
-                              No catalog items match your search.
-                            </td>
-                          </tr>
-                        ) : (
-                          filteredCatalogItems.map((item: any, index: number) => {
-                            const isOutOfStock = item.stock !== undefined && item.stock !== null && item.stock <= 0;
-                            return (
-                              <tr 
-                                key={`${item.category}-${item.name}-${index}`}
-                                className={`group bg-white dark:bg-zinc-950 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors ${isOutOfStock ? "opacity-60" : ""}`}
-                              >
-                                <td className="px-3 py-2 min-w-0">
-                                  <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{item.name}</div>
-                                  <div className="text-[10px] text-zinc-505 dark:text-zinc-400 font-medium truncate">{item.category}</div>
-                                </td>
-                                <td className="px-3 py-2 whitespace-nowrap">
-                                  {renderStockBadge(item)}
-                                </td>
-                                <td className="px-3 py-2 text-right font-black text-[#FF6A00] whitespace-nowrap">
-                                  Rs {item.price.toFixed(0)}
-                                </td>
-                                <td className="px-3 py-2 text-center">
-                                  <button
-                                    type="button"
-                                    disabled={isOutOfStock}
-                                    onClick={() => addCatalogItem(item)}
-                                    className="p-1 rounded bg-[#FF6A00]/10 hover:bg-[#FF6A00] text-[#FF6A00] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed group-hover:scale-105 cursor-pointer"
-                                    title="Add to bill"
-                                  >
-                                    <Plus size={13} strokeWidth={2.5} />
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-                  <table className="w-full text-sm">
-                    <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                      <tr>
-                        <th className="px-3 py-2 text-left text-[11px] font-bold text-zinc-505">Item</th>
-                        <th className="px-3 py-2 text-center text-[11px] font-bold text-zinc-505 w-24">Qty</th>
-                        <th className="px-3 py-2 text-right text-[11px] font-bold text-zinc-505 w-28">Rate</th>
-                        <th className="px-3 py-2 text-right text-[11px] font-bold text-zinc-505 w-28">Amount</th>
-                        <th className="px-3 py-2 text-center text-[11px] font-bold text-zinc-505 w-12"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                      {bill.items.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="px-4 py-10 text-center text-[11px] text-zinc-505 dark:text-zinc-400 font-medium">
-                            Add catalog or manual items to start.
-                          </td>
-                        </tr>
-                      ) : (
-                        bill.items.map((item, index) => (
-                          <tr key={index} className="bg-white dark:bg-zinc-955">
-                            <td className="px-3 py-1.5">
-                              <input
-                                type="text"
-                                value={item.name}
-                                onChange={(e) => updateItem(index, "name", e.target.value)}
-                                className="w-full bg-transparent border-0 border-b border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-semibold py-1 px-1 text-zinc-900 dark:text-zinc-100"
-                                placeholder="Item name"
-                              />
-                            </td>
-                            <td className="px-3 py-1.5 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => handleUpdateItemQuantity(index, e.target.value)}
-                                className="w-16 bg-transparent border-0 border-b border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-medium py-1 px-1 text-center text-zinc-900 dark:text-zinc-100"
-                              />
-                            </td>
-                            <td className="px-3 py-1.5 text-right">
-                              <input
-                                type="number"
-                                min="0"
-                                value={item.price}
-                                onChange={(e) => updateItem(index, "price", Math.max(0, Number(e.target.value) || 0))}
-                                className="w-20 bg-transparent border-0 border-b border-transparent hover:border-zinc-305 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-medium py-1 px-1 text-right text-zinc-900 dark:text-zinc-100"
-                              />
-                            </td>
-                            <td className="px-3 py-1.5 text-right text-xs font-black text-zinc-900 dark:text-zinc-100">
-                              Rs {(Number(item.quantity || 1) * Number(item.price || 0)).toFixed(0)}
-                            </td>
-                            <td className="px-3 py-1.5 text-center">
-                              <button
-                                type="button"
-                                onClick={() => removeItem(index)}
-                                className="text-red-500 hover:text-red-750 p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
-                                title="Remove item"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Input label="Discount (Rs)" type="number" value={bill.discount} onChange={(e) => updateBillField("discount", Number(e.target.value) || 0)} />
-                  <Input label="Tax Percent (GST %)" type="number" value={bill.taxPercent} onChange={(e) => updateBillField("taxPercent", Number(e.target.value) || 0)} helpText="Applies to taxable amount" />
-                </div>
-
-                <div className="flex justify-end pt-2">
-                  <Button variant="primary" icon={ChevronRight} disabled={bill.items.length === 0} onClick={() => setActiveStep(2)}>
-                    Next: Customer & Notes
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: Customer Management & settlement details */}
-            {activeStep === 2 && (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-[1.3fr_0.7fr] gap-4 items-start">
-                  
-                  {/* Customer details input fields */}
-                  <div className="space-y-3 flex-1 w-full">
-                    <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Settlement & Customer Details</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <Input label="Customer Name" value={bill.customerName} onChange={(e) => updateBillField("customerName", e.target.value)} placeholder="Walk-in customer" icon={User} />
-                      <Input label="Phone Number" value={bill.customerPhone} onChange={(e) => updateBillField("customerPhone", e.target.value)} placeholder="Mobile number" icon={Phone} />
-                      <Input label="Email" value={bill.customerEmail} onChange={(e) => updateBillField("customerEmail", e.target.value)} placeholder="Optional email" />
-                      <Input label="Customer GSTIN" value={bill.customerGst} onChange={(e) => updateBillField("customerGst", e.target.value)} placeholder="Optional GSTIN" />
-                    </div>
-                    <Textarea label="Billing Address" value={bill.billingAddress} onChange={(e) => updateBillField("billingAddress", e.target.value)} rows={2} placeholder="Street, area, city" />
-                    
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[11px] font-bold text-[#0A0A0F]/30 dark:text-zinc-500 uppercase tracking-[0.1em] px-1">Payment Method</label>
-                        <select
-                          value={bill.paymentMethod}
-                          onChange={(e) => updateBillField("paymentMethod", e.target.value)}
-                          className="w-full h-10 px-3.5 rounded-md border border-black/[0.08] dark:border-zinc-800 bg-white dark:bg-zinc-950 text-[13.5px] font-medium text-[#0A0A0F] dark:text-zinc-100 shadow-sm outline-none focus:border-[#FF6A00]/40 focus:ring-2 focus:ring-[#FF6A00]/5 cursor-pointer"
-                        >
-                          {PAYMENT_METHODS.map((method) => (
-                            <option key={method} value={method}>{method}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <Textarea label="Notes" value={bill.notes} onChange={(e) => updateBillField("notes", e.target.value)} rows={2} placeholder="Note printed on footer" />
-                  </div>
-
-                  {/* Customer directory selection */}
-                  <div className="border border-zinc-200/80 dark:border-zinc-800 rounded-md p-3 bg-zinc-50/50 dark:bg-zinc-900/50 space-y-3 w-full">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Customer Directory</h4>
-                      <span className="text-[9px] bg-zinc-200 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-400 px-1.5 py-0.5 rounded font-semibold">{filteredCustomers.length} profiles</span>
-                    </div>
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-450 dark:text-zinc-500" size={12} />
-                      <input
-                        type="text"
-                        placeholder="Search directory..."
-                        value={customerSearchQuery}
-                        onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                        className="w-full pl-8 pr-3 py-1.5 text-xs font-medium rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#FF6A00]/20 focus:border-[#FF6A00] transition-all h-8"
-                      />
-                    </div>
-                    <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                      {filteredCustomers.length === 0 ? (
-                        <div className="text-[10px] text-zinc-450 dark:text-zinc-500 text-center py-6 font-medium">No customer profiles.</div>
-                      ) : (
-                        filteredCustomers.map((profile: any) => (
-                          <button
-                            key={profile.phone || `${profile.name}_${profile.email}`}
-                            type="button"
-                            onClick={() => handleSelectCustomer(profile)}
-                            className="w-full text-left p-2 rounded border border-zinc-200/60 dark:border-zinc-800/80 hover:border-[#FF6A00]/40 hover:bg-[#FF6A00]/5 bg-white dark:bg-zinc-950 transition-all flex flex-col gap-0.5 cursor-pointer"
-                          >
-                            <div className="text-xs font-bold text-zinc-800 dark:text-zinc-200 truncate">{profile.name}</div>
-                            <div className="flex items-center justify-between text-[10px] text-zinc-505 dark:text-zinc-400">
-                              <span>{profile.phone || "No phone"}</span>
-                              <span className="font-semibold text-zinc-400 dark:text-zinc-505">{profile.billCount} bills</span>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                </div>
-
-                <div className="flex justify-between pt-2">
-                  <Button variant="outline" icon={ChevronLeft} onClick={() => setActiveStep(1)}>
-                    Back
-                  </Button>
-                  <Button variant="primary" icon={ChevronRight} onClick={() => setActiveStep(3)}>
-                    Next: Choose & Generate
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* STEP 3: Choose layout and finalise transaction */}
-            {activeStep === 3 && (
-              <div className="space-y-4">
-                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800 rounded-md p-4 space-y-3">
-                  <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200">Select Document Output Type</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    
-                    <button
-                      type="button"
-                      disabled={!hasInvoiceTools}
-                      onClick={() => setDocType("invoice")}
-                      className={`text-left p-4 rounded-md border transition-all flex items-start gap-3 relative cursor-pointer ${!hasInvoiceTools ? "opacity-50 cursor-not-allowed" : ""} ${docType === "invoice" ? "border-[#FF6A00] bg-[#FF6A00]/5 ring-2 ring-[#FF6A00]/5" : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-zinc-300 dark:hover:border-zinc-700"}`}
-                    >
-                      <FileText className={`shrink-0 ${docType === "invoice" ? "text-[#FF6A00]" : "text-zinc-400"}`} size={20} />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block">Tax Invoice (A4 Format)</span>
-                        <span className="text-[10px] text-zinc-505 dark:text-zinc-400 block font-medium mt-0.5">Professional structured layout with customer GST, detailed items, taxes, and notes.</span>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={!hasPosSlipTools}
-                      onClick={() => setDocType("pos")}
-                      className={`text-left p-4 rounded-md border transition-all flex items-start gap-3 relative cursor-pointer ${!hasPosSlipTools ? "opacity-50 cursor-not-allowed" : ""} ${docType === "pos" ? "border-[#FF6A00] bg-[#FF6A00]/5 ring-2 ring-[#FF6A00]/5" : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 hover:border-zinc-300 dark:hover:border-zinc-700"}`}
-                    >
-                      <Receipt className={`shrink-0 ${docType === "pos" ? "text-[#FF6A00]" : "text-zinc-400"}`} size={20} />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100 block">Thermal POS Slip (80mm)</span>
-                        <span className="text-[10px] text-zinc-505 dark:text-zinc-400 block font-medium mt-0.5">Compact layout designed for receipt printers. Perfect for quick checkout counters.</span>
-                      </div>
-                    </button>
-
-                  </div>
-                </div>
-
-                <div className="bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-200/80 dark:border-zinc-800 rounded-md p-4 space-y-2 text-xs">
-                  <h4 className="font-bold text-zinc-800 dark:text-zinc-200 mb-1">Final Checklist Before Checkout</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-medium text-zinc-650 dark:text-zinc-400">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="text-emerald-500 shrink-0" size={13} />
-                      <span>{bill.items.length} items ready to sell</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="text-emerald-500 shrink-0" size={13} />
-                      <span>Customer: {bill.customerName || "Walk-in Customer"}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="text-emerald-500 shrink-0" size={13} />
-                      <span>Settlement: {bill.paymentMethod}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="text-emerald-500 shrink-0" size={13} />
-                      <span>Grand Total: Rs {grandTotal.toFixed(0)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between pt-2">
-                  <Button variant="outline" icon={ChevronLeft} onClick={() => setActiveStep(2)}>
-                    Back
-                  </Button>
-                  <Button variant="primary" loading={submittingBill} onClick={handleGenerateAndPrint} icon={Printer}>
-                    Generate Bill & Print
-                  </Button>
-                </div>
-              </div>
-            )}
-
-          </div>
-
-          {/* Right panel: Sticky Billing Summary */}
-          <div className="space-y-4 xl:sticky xl:top-24 w-full">
-            <div className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <Calculator size={16} className="text-[#FF6A00]" />
-                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Billing Summary</h3>
-              </div>
-
-              <div className="space-y-2 text-[12px] font-medium text-zinc-650 dark:text-zinc-300">
-                <div className="flex items-center justify-between"><span>Subtotal</span><span>Rs {subtotal.toFixed(0)}</span></div>
-                <div className="flex items-center justify-between"><span>Discount</span><span>Rs {discountAmount.toFixed(0)}</span></div>
-                <div className="flex items-center justify-between"><span>Tax</span><span>Rs {taxAmount.toFixed(0)}</span></div>
-                <div className="pt-3 mt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between text-lg font-black text-[#FF6A00]">
-                  <span>Total</span>
-                  <span>Rs {grandTotal.toFixed(0)}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2 mt-4">
-                <Button
-                  variant="outline"
-                  icon={Save}
-                  disabled={!canManageBills || bill.items.length === 0}
-                  loading={savingBill}
-                  onClick={handleSaveBill}
-                  className="w-full text-xs h-9"
-                >
-                  {bill.id ? "Update Saved Draft" : "Save as Draft"}
+                <Button variant="outline" size="sm" icon={Plus} onClick={addManualItem} className="h-8 text-[11px]">
+                  Manual
                 </Button>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm">
-              <div className="flex items-center gap-2 mb-3">
-                <ShoppingBag size={15} className="text-[#FF6A00]" />
-                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider">Checkout Guide</h3>
+            {/* Scrollable Catalog items table */}
+            <div className="flex-1 min-h-[300px] lg:overflow-y-auto border border-zinc-150 dark:border-zinc-850 rounded-md bg-zinc-50/20 dark:bg-zinc-950/20 scrollbar-thin">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-805 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-2 text-[10px] font-bold text-zinc-505 uppercase tracking-wider">Item Name & Category</th>
+                    <th className="px-3 py-2 text-[10px] font-bold text-zinc-505 uppercase tracking-wider w-28">Stock Status</th>
+                    <th className="px-3 py-2 text-[10px] font-bold text-zinc-505 uppercase tracking-wider text-right w-24">Price</th>
+                    <th className="px-3 py-2 text-center w-12"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {filteredCatalogItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-8 text-center text-[11px] text-zinc-505 dark:text-zinc-400 font-medium bg-white dark:bg-zinc-955">
+                        No catalog items match your search.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredCatalogItems.map((item: any, index: number) => {
+                      const isOutOfStock = item.stock !== undefined && item.stock !== null && item.stock <= 0;
+                      return (
+                        <tr
+                          key={`${item.category}-${item.name}-${index}`}
+                          className={`group bg-white dark:bg-zinc-955 hover:bg-zinc-50/50 dark:hover:bg-zinc-900/30 transition-colors ${isOutOfStock ? "opacity-60" : ""}`}
+                        >
+                          <td className="px-3 py-2 min-w-0">
+                            <div className="font-semibold text-zinc-900 dark:text-zinc-100 truncate">{item.name}</div>
+                            <div className="text-[10px] text-zinc-505 dark:text-zinc-400 font-medium truncate">{item.category}</div>
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {renderStockBadge(item)}
+                          </td>
+                          <td className="px-3 py-2 text-right font-black text-[#FF6A00] whitespace-nowrap">
+                            Rs {item.price.toFixed(0)}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              disabled={isOutOfStock}
+                              onClick={() => addCatalogItem(item)}
+                              className="p-1.5 rounded bg-[#FF6A00]/10 hover:bg-[#FF6A00] text-[#FF6A00] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed group-hover:scale-105 cursor-pointer"
+                              title="Add to bill"
+                            >
+                              <Plus size={13} strokeWidth={2.5} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Right Column: Cart, Customer & Checkout */}
+          <div className="flex flex-col lg:h-full bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 rounded-md p-4 shadow-sm lg:overflow-y-auto justify-between animate-in fade-in duration-200 scrollbar-thin">
+            {/* Added Items (Cart) */}
+            <div className="flex flex-col shrink-0">
+              <div className="flex items-center justify-between mb-2 shrink-0">
+                <h3 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShoppingBag size={14} className="text-[#FF6A00]" />
+                  <span>Active Cart ({bill.items.length} items)</span>
+                </h3>
+                <div className="relative" ref={actionsMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setActionsMenuOpen((prev) => !prev)}
+                    className="h-7 px-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-[10px] font-bold text-zinc-650 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-805 hover:text-zinc-900 dark:hover:text-white transition-all flex items-center gap-1 shadow-3xs cursor-pointer select-none"
+                    aria-expanded={actionsMenuOpen}
+                    aria-haspopup="true"
+                  >
+                    <span>Actions</span>
+                    <ChevronDown size={11} className={`text-zinc-450 dark:text-zinc-500 transition-transform duration-250 ${actionsMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  {actionsMenuOpen && (
+                    <div className="absolute right-0 mt-1.5 w-48 rounded-lg border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-zinc-900 shadow-md py-1 z-50 animate-in fade-in-50 slide-in-from-top-1 duration-150 origin-top-right">
+                      {/* Section: Manage */}
+                      <div className="p-1 border-b border-zinc-100 dark:border-zinc-800/85">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resetBill();
+                            setActionsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                        >
+                          <Plus size={13} className="text-zinc-400 dark:text-zinc-500" />
+                          <span>New Bill</span>
+                        </button>
+                        
+                        {canManageBills && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setManageDialogOpen(true);
+                              clearStatusMessage();
+                              setActionsMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                          >
+                            <Receipt size={13} className="text-zinc-400 dark:text-zinc-505" />
+                            <span>Manage Bills</span>
+                          </button>
+                        )}
+
+                        {!isPortal && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const staffUrl = `${window.location.origin}/portal/billing?shopId=${shop.id}`;
+                              navigator.clipboard.writeText(staffUrl);
+                              alert("Copied Staff Billing & POS Portal Link to clipboard!\nShare this with your staff. PIN: " + (shop.staffPin || "1234"));
+                              setActionsMenuOpen(false);
+                            }}
+                            className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors cursor-pointer"
+                          >
+                            <User size={13} className="text-zinc-400 dark:text-zinc-505" />
+                            <span>Share Staff URL</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Section: Print */}
+                      <div className="p-1 border-b border-zinc-100 dark:border-zinc-800/85">
+                        <button
+                          type="button"
+                          disabled={!bill.id || !hasInvoiceTools}
+                          onClick={() => {
+                            printInvoiceHelper(bill);
+                            setActionsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <FileText size={13} className="text-zinc-400 dark:text-zinc-505" />
+                          <span>Print Invoice</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={!bill.id || !hasPosSlipTools}
+                          onClick={() => {
+                            printPosSlipHelper(bill);
+                            setActionsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-zinc-700 dark:text-zinc-350 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <Printer size={13} className="text-zinc-400 dark:text-zinc-505" />
+                          <span>Print POS Slip</span>
+                        </button>
+                      </div>
+
+                      {/* Section: Clear */}
+                      <div className="p-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            resetBill();
+                            setActionsMenuOpen(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-left text-xs font-semibold text-red-655 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={13} className="text-red-500 dark:text-red-400" />
+                          <span>Clear Cart</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2 text-[11px] text-zinc-505 dark:text-zinc-400 font-medium">
-                <p>1. Add items to your invoice and adjust discounts or GST percentages.</p>
-                <p>2. Link the checkout with a customer profile from directory to track their transaction records.</p>
-                <p>3. Choose output template and finalize transaction. Stock level will be atomic deducted.</p>
+
+              {/* Scrollable Cart items list */}
+              <div className="border border-zinc-150 dark:border-zinc-800 rounded-md bg-white dark:bg-zinc-950 scrollbar-thin mb-3">
+                <table className="w-full text-xs">
+                  <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-3 py-1.5 text-left text-[10px] font-bold text-zinc-505 uppercase tracking-wider">Item</th>
+                      <th className="px-3 py-1.5 text-center text-[10px] font-bold text-zinc-505 uppercase tracking-wider w-20">Qty</th>
+                      <th className="px-3 py-1.5 text-right text-[10px] font-bold text-zinc-505 uppercase tracking-wider w-24">Rate</th>
+                      <th className="px-3 py-1.5 text-right text-[10px] font-bold text-zinc-505 uppercase tracking-wider w-24">Amount</th>
+                      <th className="px-3 py-1.5 text-center w-8"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {bill.items.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-4 py-8 text-center text-[11px] text-zinc-505 dark:text-zinc-500 font-medium bg-white dark:bg-zinc-955">
+                          Cart is empty. Select items on the left to begin.
+                        </td>
+                      </tr>
+                    ) : (
+                      bill.items.map((item, index) => (
+                        <tr key={index} className="bg-white dark:bg-zinc-955">
+                          <td className="px-2 py-1">
+                            <input
+                              type="text"
+                              value={item.name}
+                              onChange={(e) => updateItem(index, "name", e.target.value)}
+                              className="w-full bg-transparent border-0 border-b border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-semibold py-0.5 px-0.5 text-zinc-900 dark:text-zinc-100"
+                              placeholder="Item name"
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-center">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateItemQuantity(index, e.target.value)}
+                              className="w-12 bg-transparent border-0 border-b border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-medium py-0.5 px-0.5 text-center text-zinc-900 dark:text-zinc-100"
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-right">
+                            <input
+                              type="number"
+                              min="0"
+                              value={item.price}
+                              onChange={(e) => updateItem(index, "price", Math.max(0, Number(e.target.value) || 0))}
+                              className="w-16 bg-transparent border-0 border-b border-transparent hover:border-zinc-300 dark:hover:border-zinc-700 focus:border-[#FF6A00] focus:ring-0 text-xs font-medium py-0.5 px-0.5 text-right text-zinc-900 dark:text-zinc-100"
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-right text-xs font-black text-zinc-900 dark:text-zinc-100">
+                            Rs {(Number(item.quantity || 1) * Number(item.price || 0)).toFixed(0)}
+                          </td>
+                          <td className="px-1 py-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeItem(index)}
+                              className="text-red-500 hover:text-red-750 p-0.5 rounded-md hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Checkout & Customer Details */}
+            <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3 space-y-3 shrink-0">
+              {/* Customer Info */}
+              <div className="space-y-2 relative">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Customer Name</label>
+                    <input
+                      type="text"
+                      value={bill.customerName}
+                      onChange={(e) => {
+                        updateBillField("customerName", e.target.value);
+                        setCustomerSearchQuery(e.target.value);
+                      }}
+                      placeholder="Walk-in customer"
+                      className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs font-semibold focus:outline-none focus:border-[#FF6A00]/40 focus:ring-2 focus:ring-[#FF6A00]/5 text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Phone Number</label>
+                    <input
+                      type="text"
+                      value={bill.customerPhone}
+                      onChange={(e) => {
+                        updateBillField("customerPhone", e.target.value);
+                        setCustomerSearchQuery(e.target.value);
+                      }}
+                      placeholder="Mobile number"
+                      className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs font-semibold focus:outline-none focus:border-[#FF6A00]/40 focus:ring-2 focus:ring-[#FF6A00]/5 text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+
+                {/* Autocomplete Dropdown */}
+                {customerSearchQuery.trim() && filteredCustomers.length > 0 && (
+                  <div className="absolute bottom-9 left-0 right-0 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-md shadow-lg max-h-32 overflow-y-auto p-1 divide-y divide-zinc-100 dark:divide-zinc-800 animate-in fade-in duration-150">
+                    {filteredCustomers.map((profile: any) => (
+                      <button
+                        key={profile.phone || `${profile.name}_${profile.email}`}
+                        type="button"
+                        onClick={() => {
+                          handleSelectCustomer(profile);
+                          setCustomerSearchQuery("");
+                        }}
+                        className="w-full text-left p-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded text-[11px] transition-all flex justify-between items-center cursor-pointer"
+                      >
+                        <div>
+                          <span className="font-bold text-zinc-805 dark:text-zinc-200">{profile.name}</span>
+                          {profile.phone && <span className="text-zinc-400 dark:text-zinc-505 ml-2 font-medium">({profile.phone})</span>}
+                        </div>
+                        <span className="text-[9px] font-semibold text-zinc-400 dark:text-zinc-505">{profile.billCount} bills</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Toggle for Advanced Customer Fields */}
+              <div className="flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowMoreCustomerFields(!showMoreCustomerFields)}
+                  className="text-[10px] text-[#FF6A00] hover:text-[#C85200] font-bold transition-colors cursor-pointer"
+                >
+                  {showMoreCustomerFields ? "- Hide More Customer Info" : "+ Add GST/Email/Address"}
+                </button>
+              </div>
+
+              {showMoreCustomerFields && (
+                <div className="grid grid-cols-2 gap-2 p-2 rounded bg-zinc-50/50 dark:bg-zinc-950/50 border border-zinc-100 dark:border-zinc-800/55 animate-in slide-in-from-top-1 duration-200">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider">Email</label>
+                    <input
+                      type="email"
+                      value={bill.customerEmail || ""}
+                      onChange={(e) => updateBillField("customerEmail", e.target.value)}
+                      placeholder="Email address"
+                      className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider">GSTIN</label>
+                    <input
+                      type="text"
+                      value={bill.customerGst || ""}
+                      onChange={(e) => updateBillField("customerGst", e.target.value)}
+                      placeholder="GST number"
+                      className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5 col-span-2">
+                    <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider">Billing Address</label>
+                    <input
+                      type="text"
+                      value={bill.billingAddress || ""}
+                      onChange={(e) => updateBillField("billingAddress", e.target.value)}
+                      placeholder="Address details"
+                      className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Settlement details: discount, tax, payment method, notes */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Discount (Rs)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={bill.discount}
+                    onChange={(e) => updateBillField("discount", Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs font-semibold focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Tax (GST %)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={bill.taxPercent}
+                    onChange={(e) => updateBillField("taxPercent", Math.max(0, Number(e.target.value) || 0))}
+                    className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs font-semibold focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Payment Method</label>
+                  <select
+                    value={bill.paymentMethod}
+                    onChange={(e) => updateBillField("paymentMethod", e.target.value)}
+                    className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs font-semibold focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100 cursor-pointer"
+                  >
+                    {PAYMENT_METHODS.map((method) => (
+                      <option key={method} value={method}>{method}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Notes field */}
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5">Footer Notes</label>
+                <input
+                  type="text"
+                  value={bill.notes || ""}
+                  onChange={(e) => updateBillField("notes", e.target.value)}
+                  placeholder="Thank you for shopping!"
+                  className="w-full h-8 px-2 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950 text-xs focus:outline-none focus:border-[#FF6A00]/40 text-zinc-900 dark:text-zinc-100"
+                />
+              </div>
+
+              {/* Document Output Toggle */}
+              <div className="bg-zinc-50/50 dark:bg-zinc-950/50 border border-zinc-150 dark:border-zinc-850 rounded-md p-2 space-y-1.5">
+                <span className="text-[9px] font-bold text-zinc-400 dark:text-zinc-505 uppercase tracking-wider px-0.5 block">Document Format</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={!hasInvoiceTools}
+                    onClick={() => setDocType("invoice")}
+                    className={`h-8 px-3 rounded-md border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${!hasInvoiceTools ? "opacity-40 cursor-not-allowed" : ""} ${docType === "invoice" ? "border-[#FF6A00] bg-[#FF6A00]/5 text-[#FF6A00] font-black" : "border-zinc-205 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:border-zinc-350 dark:hover:border-zinc-700"}`}
+                  >
+                    <FileText size={12} />
+                    <span>A4 Tax Invoice</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!hasPosSlipTools}
+                    onClick={() => setDocType("pos")}
+                    className={`h-8 px-3 rounded-md border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${!hasPosSlipTools ? "opacity-40 cursor-not-allowed" : ""} ${docType === "pos" ? "border-[#FF6A00] bg-[#FF6A00]/5 text-[#FF6A00] font-black" : "border-zinc-205 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:border-zinc-350 dark:hover:border-zinc-700"}`}
+                  >
+                    <Receipt size={12} />
+                    <span>80mm POS Slip</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Billing Summary & Actions */}
+              <div className="bg-zinc-50/50 dark:bg-zinc-950/50 border border-zinc-200 dark:border-zinc-800 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Calculator size={13} className="text-[#FF6A00]" />
+                  <span className="text-[10px] font-bold text-zinc-805 dark:text-zinc-250 uppercase tracking-wider">Order Summary</span>
+                </div>
+
+                <div className="space-y-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  <div className="flex items-center justify-between">
+                    <span>Subtotal ({bill.items.length} items)</span>
+                    <span className="text-zinc-700 dark:text-zinc-300 font-bold">Rs {subtotal.toFixed(0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Discount</span>
+                    <span className="text-red-500 font-bold">- Rs {discountAmount.toFixed(0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Tax (GST)</span>
+                    <span className="text-zinc-700 dark:text-zinc-300 font-bold">Rs {taxAmount.toFixed(0)}</span>
+                  </div>
+                  <div className="pt-2 mt-1 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between text-base font-black text-[#FF6A00]">
+                    <span>Grand Total</span>
+                    <span>Rs {grandTotal.toFixed(0)}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1.1fr_0.9fr] gap-2 pt-2">
+                  <Button
+                    variant="primary"
+                    loading={submittingBill}
+                    onClick={handleGenerateAndPrint}
+                    icon={Printer}
+                    disabled={bill.items.length === 0}
+                    className="w-full text-xs h-9 bg-[#FF6A00] hover:bg-[#C85200] border-[#FF6A00] text-white font-bold"
+                  >
+                    Checkout & Print
+                  </Button>
+                  <Button
+                    variant="outline"
+                    icon={Save}
+                    disabled={!canManageBills || bill.items.length === 0}
+                    loading={savingBill}
+                    onClick={handleSaveBill}
+                    className="w-full text-xs h-9"
+                  >
+                    {bill.id ? "Update Draft" : "Save Draft"}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -1257,6 +1346,7 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
                 <tr>
                   <th className="px-3 py-2 text-left text-[11px] font-bold text-zinc-505">Bill No</th>
                   <th className="px-3 py-2 text-left text-[11px] font-bold text-zinc-505">Customer</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-bold text-zinc-505">Source</th>
                   <th className="px-3 py-2 text-left text-[11px] font-bold text-zinc-505">Updated</th>
                   <th className="px-3 py-2 text-right text-[11px] font-bold text-zinc-505">Total</th>
                   <th className="px-3 py-2 text-center text-[11px] font-bold text-zinc-505">Actions</th>
@@ -1285,6 +1375,25 @@ const BillingPosTab: React.FC<BillingPosTabProps> = ({ shop }) => {
                       <td className="px-3 py-3">
                         <div className="text-xs font-semibold text-zinc-850 dark:text-zinc-200">{savedBill.customerName || "Walk-in Customer"}</div>
                         <div className="text-[10px] text-zinc-505 dark:text-zinc-400">{savedBill.customerPhone || "-"}</div>
+                      </td>
+                      <td className="px-3 py-3">
+                        {savedBill.source === "qr_table_checkout" ? (
+                          <div>
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-600 dark:text-violet-400">
+                              <Table2 size={9} />Table Order
+                            </span>
+                            {savedBill.tableName && (
+                              <div className="text-[10px] text-zinc-500 mt-0.5 font-medium">{savedBill.tableName}</div>
+                            )}
+                            {savedBill.collectedBy && (
+                              <div className="text-[9px] text-zinc-400">{savedBill.collectedBy}</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                            Manual
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-3 text-[11px] text-zinc-505 dark:text-zinc-400 font-medium">
                         {savedBill.updatedAt ? new Date(savedBill.updatedAt).toLocaleString("en-IN") : "-"}

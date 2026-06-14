@@ -5,6 +5,8 @@ import {
   getShopRatings,
   deleteShopRating,
   getMasterFeatures,
+  createPaymentRecord,
+  getShopPayments,
 } from "@/lib/db";
 
 export const fetchMerchantShop = createAsyncThunk<any, { shopId: string; userId?: string }, { rejectValue: string }>(
@@ -81,9 +83,40 @@ export const fetchMasterFeatures = createAsyncThunk<any[], void, { rejectValue: 
   }
 );
 
-export const purchaseMerchantFeature = createAsyncThunk<any, { shopId: string; featureKey: string; billingCycle: string; price: number; trialDays?: number; currentPaidFeatures?: any }, { rejectValue: string }>(
+export const purchaseMerchantFeature = createAsyncThunk<
+  any,
+  {
+    shopId: string;
+    featureKey: string;
+    featureTitle?: string;
+    billingCycle: string;
+    price: number;
+    trialDays?: number;
+    currentPaidFeatures?: any;
+    paymentMethod?: string;
+    transactionId?: string;
+    amountPaid?: number;
+    gstAmount?: number;
+  },
+  { rejectValue: string }
+>(
   "dashboard/purchaseFeature",
-  async ({ shopId, featureKey, billingCycle, price, trialDays, currentPaidFeatures = {} }, { rejectWithValue }) => {
+  async (
+    {
+      shopId,
+      featureKey,
+      featureTitle,
+      billingCycle,
+      price,
+      trialDays,
+      currentPaidFeatures = {},
+      paymentMethod,
+      transactionId,
+      amountPaid,
+      gstAmount,
+    },
+    { rejectWithValue }
+  ) => {
     try {
       const now = new Date();
       const expiresAt = new Date();
@@ -112,9 +145,26 @@ export const purchaseMerchantFeature = createAsyncThunk<any, { shopId: string; f
         [featureKey]: featureRecord,
       };
 
+      // 1. Update the shop record in Firestore
       const result = await updateShop(shopId, { paidFeatures: nextPaidFeatures });
       if (!result.success) {
         return rejectWithValue("Failed to activate feature");
+      }
+
+      // 2. Log payment transaction if it's not a free trial and has a price
+      if (price > 0 && !(trialDays && trialDays > 0)) {
+        await createPaymentRecord({
+          shopId,
+          featureKey,
+          featureTitle: featureTitle || featureKey,
+          billingCycle,
+          subtotal: price,
+          gstAmount: gstAmount || Math.round(price * 0.18),
+          amountPaid: amountPaid || Math.round(price * 1.18),
+          paymentMethod: paymentMethod || "Sandbox",
+          transactionId: transactionId || `TXN-SB-${Math.floor(100000 + Math.random() * 900000)}`,
+          status: "completed",
+        });
       }
 
       return { featureKey, featureRecord, nextPaidFeatures };
@@ -123,6 +173,19 @@ export const purchaseMerchantFeature = createAsyncThunk<any, { shopId: string; f
     }
   }
 );
+
+export const fetchShopPayments = createAsyncThunk<any[], string, { rejectValue: string }>(
+  "dashboard/fetchShopPayments",
+  async (shopId, { rejectWithValue }) => {
+    try {
+      const data = await getShopPayments(shopId);
+      return data || [];
+    } catch (error: any) {
+      return rejectWithValue(error.message || "Failed to fetch shop payments");
+    }
+  }
+);
+
 
 export const toggleMerchantFeature = createAsyncThunk<any, { shopId: string; featureKey: string; enabled: boolean; currentPaidFeatures?: any }, { rejectValue: string }>(
   "dashboard/toggleFeature",

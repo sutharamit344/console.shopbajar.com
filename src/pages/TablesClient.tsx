@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, Link } from "react-router-dom";
 import { useShopOwner } from "@/hooks/useShopOwner";
-import { updateShop } from "@/lib/db";
+import { updateShop, createBill } from "@/lib/db";
+import { ChairsRenderer } from "@/components/Tables/ChairsRenderer";
+import { printPosSlip } from "@/lib/printPosSlip";
 import {
   addTable,
   deleteTable,
@@ -16,6 +18,7 @@ import {
   updateSessionStatus,
   updateOrderStatus,
   approveSession,
+  getSessionOrders,
 } from "@/lib/rtdb";
 import { DOMAIN, MAIN_APP_URL, getCustomerAppUrl } from "@/lib/config";
 import Card from "@/components/UI/Card";
@@ -48,6 +51,8 @@ import {
   ChevronUp,
   Bell,
   Calculator,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 export default function TablesClient() {
@@ -56,6 +61,18 @@ export default function TablesClient() {
   const { shop: initialShop, loading: shopLoading, error } = useShopOwner();
   const [shop, setShop] = useState<any>(null);
   const isPortal = window.location.pathname.startsWith("/portal");
+
+  // Fullscreen state detection
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   useEffect(() => {
     if (initialShop) {
@@ -71,7 +88,16 @@ export default function TablesClient() {
     name: "",
     capacity: "4",
     shape: "round",
+    bookingPrice: "0",
   });
+  const [isEditingTable, setIsEditingTable] = useState<boolean>(false);
+  const [editForm, setEditForm] = useState<any>({
+    name: "",
+    capacity: "4",
+    shape: "round",
+    bookingPrice: "0",
+  });
+
   const [adding, setAdding] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -80,13 +106,30 @@ export default function TablesClient() {
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [viewMode, setViewMode] = useState<string>("map"); // 'grid' | 'map'
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null); // tableId string for detail dialog
+
+  useEffect(() => {
+    if (selectedTableId) {
+      const tbl = tables.find((t) => t.id === selectedTableId);
+      if (tbl) {
+        setEditForm({
+          name: tbl.name || "",
+          capacity: String(tbl.capacity || 4),
+          shape: tbl.shape || "round",
+          bookingPrice: String(tbl.bookingPrice || 0),
+        });
+      }
+    }
+    setIsEditingTable(false);
+  }, [selectedTableId, tables]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]); // running orders for active session
   const [gridCols, setGridCols] = useState<number>(4); // dynamic grid columns count
   const [confirmAction, setConfirmAction] = useState<any>(null); // { message, onConfirm }
   const [activeSessionTab, setActiveSessionTab] = useState<string>("all"); // 'all' | sessionId
   const [expandedSessions, setExpandedSessions] = useState<any>({}); // sessionId -> boolean (default true)
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
-  const [expandedHistorySessionId, setExpandedHistorySessionId] = useState<string | null>(null);
+  const [expandedHistorySessionId, setExpandedHistorySessionId] = useState<
+    string | null
+  >(null);
 
   const getSessionCode = (sessionId) => {
     if (!sessionId) return "";
@@ -202,10 +245,26 @@ export default function TablesClient() {
       name: addForm.name.trim(),
       capacity: parseInt(addForm.capacity) || 4,
       shape: addForm.shape || "round",
+      bookingPrice: parseInt(addForm.bookingPrice) || 0,
     });
-    setAddForm({ name: "", capacity: "4", shape: "round" });
+    setAddForm({ name: "", capacity: "4", shape: "round", bookingPrice: "0" });
     setShowAddDialog(false);
     setAdding(false);
+  };
+
+  const handleSaveTableEdit = async () => {
+    if (!selectedTableId || !shop?.id || !editForm.name.trim()) return;
+    try {
+      await updateTable(shop.id, selectedTableId, {
+        name: editForm.name.trim(),
+        capacity: Number(editForm.capacity) || 4,
+        shape: editForm.shape || "round",
+        bookingPrice: Number(editForm.bookingPrice) || 0,
+      });
+      setIsEditingTable(false);
+    } catch (err) {
+      console.error("Error editing table: ", err);
+    }
   };
 
   const handleDeleteTable = async () => {
@@ -217,208 +276,7 @@ export default function TablesClient() {
     setDeletingId(null);
   };
 
-  const handlePrintSessionPosSlip = (session) => {
-    const printWindow = window.open("", "_blank", "width=420,height=700");
-    if (!printWindow) return;
 
-    const dateObj = new Date();
-    const dateStr = dateObj.toLocaleDateString("en-IN");
-    const timeStr = dateObj.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-    // Get orders belonging to this session
-    const sessionOrders = activeOrders.filter(
-      (o) => o.sessionId === session.id,
-    );
-
-    // Consolidate items
-    const consolidatedItems = {};
-    sessionOrders.forEach((order) => {
-      if (order.status === "cancelled") return;
-      order.items?.forEach((item: any) => {
-        const price = parseFloat(item.price || 0);
-        if (consolidatedItems[item.name]) {
-          consolidatedItems[item.name].qty += parseInt(item.qty || 1);
-        } else {
-          consolidatedItems[item.name] = {
-            name: item.name,
-            price: price,
-            qty: parseInt(item.qty || 1),
-          };
-        }
-      });
-    });
-
-    const itemsArray = Object.values(consolidatedItems) as any[];
-    const finalTotal = itemsArray.reduce(
-      (sum: number, item: any) => sum + item.price * item.qty,
-      0,
-    );
-
-    const itemRows = itemsArray
-      .map((item) => {
-        const lineTotal = item.qty * item.price;
-        return `
-        <div class="item">
-          <div class="item-top">
-            <span class="item-name">${item.name || "Item"}</span>
-            <span class="item-total">Rs ${lineTotal.toFixed(0)}</span>
-          </div>
-          <div class="item-meta">${item.qty} x Rs ${item.price.toFixed(0)}</div>
-        </div>
-      `;
-      })
-      .join("");
-
-    const guestName = getGuestNames(session);
-    const guestPhone = getGuestPhones(session);
-
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>POS Slip - ${shop.name} - ${session.tableName}</title>
-        <style>
-          @page { size: 80mm auto; margin: 6mm; }
-          body {
-            font-family: "Courier New", monospace;
-            color: #111;
-            margin: 0;
-            padding: 0;
-            font-size: 12px;
-            line-height: 1.4;
-          }
-          .slip {
-            width: 72mm;
-            margin: 0 auto;
-          }
-          .center { text-align: center; }
-          .title {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-          }
-          .muted {
-            color: #444;
-            font-size: 11px;
-          }
-          .divider {
-            border-top: 1px dashed #000;
-            margin: 10px 0;
-          }
-          .row {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            margin: 2px 0;
-          }
-          .label {
-            color: #444;
-          }
-          .item {
-            padding: 6px 0;
-            border-bottom: 1px dashed #ccc;
-          }
-          .item-top {
-            display: flex;
-            justify-content: space-between;
-            gap: 8px;
-            align-items: flex-start;
-          }
-          .item-name {
-            font-weight: 700;
-            word-break: break-word;
-          }
-          .item-total {
-            font-weight: 700;
-            white-space: nowrap;
-          }
-          .item-meta {
-            color: #444;
-            font-size: 11px;
-            margin-top: 2px;
-          }
-          .grand-total {
-            font-size: 15px;
-            font-weight: 700;
-            margin-top: 8px;
-          }
-          .footer {
-            margin-top: 15px;
-            text-align: center;
-            font-size: 11px;
-          }
-          .paid-stamp {
-            border: 2px solid #000;
-            color: #000;
-            font-size: 14px;
-            font-weight: bold;
-            padding: 4px 8px;
-            margin: 12px auto;
-            width: fit-content;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-          }
-          @media print {
-            button { display: none; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="slip">
-          <div class="center">
-            <div class="title">${shop.name}</div>
-            <div class="muted">${shop.category || "Store"}</div>
-            ${shop.phone ? `<div class="muted">Ph: ${shop.phone}</div>` : ""}
-            <div class="muted">${[shop.area, shop.city].filter(Boolean).join(", ")}</div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="row"><span class="label">Table</span><span><strong>${session.tableName || "Table"}</strong></span></div>
-          <div class="row"><span class="label">Session ID</span><span>#${session.id?.substring(0, 6).toUpperCase() || "-"}</span></div>
-          <div class="row"><span class="label">Date</span><span>${dateStr}</span></div>
-          <div class="row"><span class="label">Time</span><span>${timeStr}</span></div>
-
-          <div class="divider"></div>
-
-          <div class="row"><span class="label">Customer</span><span>${guestName || "Guest"}</span></div>
-          ${guestPhone ? `<div class="row"><span class="label">Phone</span><span>${guestPhone}</span></div>` : ""}
-
-          <div class="divider"></div>
-
-          ${itemRows || '<div class="center muted">No items ordered</div>'}
-
-          <div class="divider"></div>
-
-          <div class="row grand-total">
-            <span>TOTAL AMOUNT</span>
-            <span>Rs ${finalTotal.toFixed(0)}</span>
-          </div>
-
-          <div class="paid-stamp">PAID</div>
-
-          <div class="footer">
-            <div>Thank you for dining with us!</div>
-            <div>Powered by ShopBajar</div>
-          </div>
-        </div>
-        <script>
-          window.onload = function() {
-            window.print();
-            window.onafterprint = function() { window.close(); };
-          };
-        </script>
-      </body>
-      </html>
-    `;
-
-    printWindow.document.write(html);
-    printWindow.document.close();
-  };
 
   const handleForceCloseSession = (session) => {
     const isPending = session.status === "pending";
@@ -432,12 +290,94 @@ export default function TablesClient() {
           (t) => t.currentSessionId === session.id,
         );
 
-        // Print the POS Slip only if the session is not pending
+        let sessionOrders: any[] = [];
+        let itemsArray: any[] = [];
+        let subtotal = 0;
+
+        // Print the POS Slip and save Firestore bill only if the session is not pending
         if (!isPending) {
-          handlePrintSessionPosSlip(session);
+          try {
+            sessionOrders = await getSessionOrders(shop.id, session.id);
+            
+            const consolidatedItems: Record<string, any> = {};
+            sessionOrders.forEach((order) => {
+              if (order.status === "cancelled") return;
+              order.items?.forEach((item: any) => {
+                if (item.status === "cancelled") return;
+                const price = parseFloat(item.price || 0);
+                const key = `${item.name}_${price}`;
+                if (consolidatedItems[key]) {
+                  consolidatedItems[key].quantity += parseInt(item.qty || 1);
+                } else {
+                  consolidatedItems[key] = {
+                    name: item.name,
+                    category: item.category || "Table Order",
+                    price: price,
+                    quantity: parseInt(item.qty || 1),
+                  };
+                }
+              });
+            });
+
+            itemsArray = Object.values(consolidatedItems);
+            subtotal = itemsArray.reduce(
+              (sum, item) => sum + item.price * item.quantity,
+              0
+            );
+
+            if (itemsArray.length > 0) {
+              await createBill({
+                shopId: shop.id,
+                shopName: shop.name || "",
+                ownerId: user?.uid || shop.ownerId || "",
+                billNumber: `QR-${session.tableName.replace(/\s+/g, "").toUpperCase()}-${String(Date.now()).slice(-6)}`,
+                customerName: getGuestNames(session),
+                customerPhone: getGuestPhones(session) || "",
+                customerEmail: "",
+                customerGst: "",
+                billingAddress: "",
+                notes: `Table: ${session.tableName} · Session: ${session.id}`,
+                paymentMethod: "Cash",
+                discount: 0,
+                taxPercent: 0,
+                taxAmount: 0,
+                subtotal: subtotal,
+                totalAmount: subtotal,
+                status: "paid",
+                source: "qr_table_checkout",
+                tableId: session.tableId,
+                tableName: session.tableName,
+                sessionId: session.id,
+                collectedBy: "Dashboard Seating",
+                items: itemsArray.map((item) => ({
+                  name: item.name || "",
+                  category: item.category || "Table Order",
+                  quantity: Number(item.quantity) || 1,
+                  price: Number(item.price) || 0,
+                })),
+              });
+            }
+
+            // Print the POS Slip passing the fetched orders
+            printPosSlip(shop, session, sessionOrders);
+
+          } catch (err) {
+            console.error("Error creating bill or fetching orders for checkout: ", err);
+          }
         }
 
-        await closeSession(shop.id, session.id, session.tableId);
+        const checkoutData = !isPending && itemsArray.length > 0 ? {
+          collectedBy: "Dashboard Seating",
+          paymentMethod: "Cash",
+          billAmount: subtotal,
+          items: itemsArray.map(item => ({
+            name: item.name,
+            qty: item.quantity,
+            price: item.price
+          })),
+        } : undefined;
+
+        await closeSession(shop.id, session.id, session.tableId, checkoutData);
         for (const lt of linkedTables) {
           if (lt.id !== session.tableId) {
             await updateTable(shop.id, lt.id, { currentSessionId: null });
@@ -480,138 +420,7 @@ export default function TablesClient() {
     });
   };
 
-  const renderChairs = (
-    capacity: number,
-    shape: string,
-    activeCount: number,
-    pendingCount: number,
-  ) => {
-    const chairs = [];
-    const isRound = shape === "round" || (!shape && capacity <= 4);
-    let coords: { x: number; y: number }[] = [];
 
-    if (!isRound) {
-      // Linear layout coordinate rules for rectangular tables (x%, y%)
-      if (capacity <= 2) {
-        coords = [
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 3) {
-        coords = [
-          { x: 50, y: 16 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 4) {
-        coords = [
-          { x: 50, y: 16 },
-          { x: 50, y: 84 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 5) {
-        coords = [
-          { x: 35, y: 16 },
-          { x: 65, y: 16 },
-          { x: 50, y: 84 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 6) {
-        coords = [
-          { x: 33, y: 16 },
-          { x: 67, y: 16 },
-          { x: 33, y: 84 },
-          { x: 67, y: 84 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 7) {
-        coords = [
-          { x: 30, y: 16 },
-          { x: 50, y: 16 },
-          { x: 70, y: 16 },
-          { x: 33, y: 84 },
-          { x: 67, y: 84 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else if (capacity === 8) {
-        coords = [
-          { x: 30, y: 16 },
-          { x: 50, y: 16 },
-          { x: 70, y: 16 },
-          { x: 30, y: 84 },
-          { x: 50, y: 84 },
-          { x: 70, y: 84 },
-          { x: 8, y: 50 },
-          { x: 92, y: 50 },
-        ];
-      } else {
-        const sideChairs = 2;
-        const topBottomChairs = capacity - sideChairs;
-        const topChairs = Math.ceil(topBottomChairs / 2);
-        const bottomChairs = Math.floor(topBottomChairs / 2);
-        coords.push({ x: 8, y: 50 });
-        coords.push({ x: 92, y: 50 });
-        for (let j = 0; j < topChairs; j++) {
-          const tX = topChairs > 1 ? 25 + (j * 50) / (topChairs - 1) : 50;
-          coords.push({ x: tX, y: 16 });
-        }
-        for (let j = 0; j < bottomChairs; j++) {
-          const bX = bottomChairs > 1 ? 25 + (j * 50) / (bottomChairs - 1) : 50;
-          coords.push({ x: bX, y: 84 });
-        }
-      }
-
-      return coords.slice(0, capacity).map((c, i) => {
-        let chairClass = "bg-zinc-200 dark:bg-zinc-700";
-        if (i < activeCount) {
-          chairClass = "bg-emerald-450 border border-emerald-500 shadow-xs";
-        } else if (i < activeCount + pendingCount) {
-          chairClass = "bg-amber-450 border border-amber-500 shadow-xs";
-        }
-        return (
-          <div
-            key={i}
-            className={`absolute w-2 h-2 transition-all rounded-[2px] ${chairClass}`}
-            style={{
-              left: `${c.x}%`,
-              top: `${c.y}%`,
-              transform: "translate(-50%, -50%)",
-            }}
-          />
-        );
-      });
-    }
-
-    // Circular table chairs (Trigonometric distribution)
-    const radius = 43; // percent radius from center
-    for (let i = 0; i < capacity; i++) {
-      const angle = (i * 2 * Math.PI) / capacity - Math.PI / 2; // start from top (90 deg)
-      const x = 50 + radius * Math.cos(angle);
-      const y = 50 + radius * Math.sin(angle);
-      let chairClass = "bg-zinc-200 dark:bg-zinc-700";
-      if (i < activeCount) {
-        chairClass = "bg-emerald-450 border border-emerald-500 shadow-xs";
-      } else if (i < activeCount + pendingCount) {
-        chairClass = "bg-amber-450 border border-amber-500 shadow-xs";
-      }
-      chairs.push(
-        <div
-          key={i}
-          className={`absolute w-2 h-2 transition-all rounded-full ${chairClass}`}
-          style={{
-            left: `${x}%`,
-            top: `${y}%`,
-            transform: "translate(-50%, -50%)",
-          }}
-        />,
-      );
-    }
-    return chairs;
-  };
 
   const handleMergeTables = async () => {
     if (!shop?.id || !pendingMergeTable || !mergeTargetId) return;
@@ -846,7 +655,8 @@ export default function TablesClient() {
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 text-zinc-900 dark:text-zinc-150 transition-colors duration-200">
       <div className="w-full px-4 md:px-8 py-4">
         {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
+        {!isFullscreen && (
+          <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
           {/* Left: Back button + Title & Shop Stats */}
           <div className="flex items-center gap-2.5 min-w-0">
             {!isPortal && (
@@ -932,8 +742,28 @@ export default function TablesClient() {
               <Bell size={12} className="text-[#FF6A00]" />
               <span className="hidden sm:inline">Waiter</span>
             </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen().catch((err) => {
+                    console.error("Failed to enter fullscreen:", err);
+                  });
+                } else {
+                  document.exitFullscreen().catch((err) => {
+                    console.error("Failed to exit fullscreen:", err);
+                  });
+                }
+              }}
+              className="h-8 w-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all shadow-sm shrink-0 cursor-pointer"
+              title="Enter Fullscreen"
+            >
+              <Maximize2 size={13} />
+            </button>
           </div>
         </div>
+      )}
 
         {/* ── TWO-COLUMN GRID LAYOUT (Rearranged for mobile layout ordering) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -1104,6 +934,21 @@ export default function TablesClient() {
                     </button>
                   </div>
                 </div>
+                <div className="space-y-1">
+                  <label className="text-[9.5px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                    Booking Price (₹)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="0 for free"
+                    value={addForm.bookingPrice}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, bookingPrice: e.target.value })
+                    }
+                    className="w-full h-8.5 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-955 text-[12px] font-medium outline-none focus:border-[#FF6A00]/40 focus:bg-white dark:focus:bg-zinc-900 text-[#0A0A0F] dark:text-zinc-200 transition-all"
+                  />
+                </div>
                 <Button
                   variant="dark"
                   icon={Plus}
@@ -1124,7 +969,12 @@ export default function TablesClient() {
                   Session History
                 </h3>
                 <span className="text-[9px] font-black text-zinc-400 dark:text-zinc-500 bg-zinc-50 dark:bg-zinc-950 border border-black/[0.04] dark:border-zinc-850 px-1.5 py-0.5 rounded">
-                  {sessions.filter((s) => s.status === "closed" || s.status === "rejected").length} records
+                  {
+                    sessions.filter(
+                      (s) => s.status === "closed" || s.status === "rejected",
+                    ).length
+                  }{" "}
+                  records
                 </span>
               </div>
 
@@ -1145,8 +995,14 @@ export default function TablesClient() {
 
               {(() => {
                 const pastSessions = sessions
-                  .filter((s) => s.status === "closed" || s.status === "rejected")
-                  .sort((a, b) => (b.closedAt || b.createdAt || 0) - (a.closedAt || a.createdAt || 0));
+                  .filter(
+                    (s) => s.status === "closed" || s.status === "rejected",
+                  )
+                  .sort(
+                    (a, b) =>
+                      (b.closedAt || b.createdAt || 0) -
+                      (a.closedAt || a.createdAt || 0),
+                  );
 
                 const filteredPast = pastSessions.filter((s) => {
                   const query = historySearchQuery.trim().toLowerCase();
@@ -1160,7 +1016,10 @@ export default function TablesClient() {
                 if (filteredPast.length === 0) {
                   return (
                     <div className="p-6 text-center">
-                      <Clock size={24} className="mx-auto text-zinc-250 dark:text-zinc-700 mb-2" />
+                      <Clock
+                        size={24}
+                        className="mx-auto text-zinc-250 dark:text-zinc-700 mb-2"
+                      />
                       <p className="text-[11px] font-bold text-zinc-400 dark:text-zinc-550">
                         No past sessions
                       </p>
@@ -1181,12 +1040,19 @@ export default function TablesClient() {
                             timeStyle: "short",
                           })
                         : sess.createdAt
-                          ? new Date(sess.createdAt).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })
+                          ? new Date(sess.createdAt).toLocaleString("en-IN", {
+                              dateStyle: "short",
+                              timeStyle: "short",
+                            })
                           : "—";
                       return (
                         <div key={sess.id}>
                           <div
-                            onClick={() => setExpandedHistorySessionId(isExpanded ? null : sess.id)}
+                            onClick={() =>
+                              setExpandedHistorySessionId(
+                                isExpanded ? null : sess.id,
+                              )
+                            }
                             className="px-3.5 py-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-850/50 transition-colors"
                           >
                             <div className="min-w-0 flex-1">
@@ -1194,12 +1060,16 @@ export default function TablesClient() {
                                 <span className="text-[11px] font-extrabold text-zinc-800 dark:text-zinc-200">
                                   {sess.tableName}
                                 </span>
-                                <span className={`text-[8px] font-black uppercase px-1 py-0.5 rounded tracking-wider ${
-                                  sess.status === "closed"
-                                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                    : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
-                                }`}>
-                                  {sess.status === "closed" ? "Paid" : "Rejected"}
+                                <span
+                                  className={`text-[8px] font-black uppercase px-1 py-0.5 rounded tracking-wider ${
+                                    sess.status === "closed"
+                                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                      : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                                  }`}
+                                >
+                                  {sess.status === "closed"
+                                    ? "Paid"
+                                    : "Rejected"}
                                 </span>
                               </div>
                               <p className="text-[9.5px] text-zinc-400 dark:text-zinc-500 font-medium mt-0.5 truncate">
@@ -1210,7 +1080,9 @@ export default function TablesClient() {
                               {sess.status === "closed" && (
                                 <div className="text-right">
                                   <p className="text-[11px] font-black text-[#FF6A00]">
-                                    {sess.billAmount !== undefined ? `₹${sess.billAmount}` : "—"}
+                                    {sess.billAmount !== undefined
+                                      ? `₹${sess.billAmount}`
+                                      : "—"}
                                   </p>
                                   <p className="text-[8.5px] text-zinc-400 font-bold uppercase">
                                     {sess.paymentMethod || "Cash"}
@@ -1230,31 +1102,59 @@ export default function TablesClient() {
                             <div className="px-3.5 pb-3.5 pt-0 bg-zinc-50/60 dark:bg-zinc-950/30 space-y-2.5 border-t border-black/[0.03] dark:border-zinc-850">
                               <div className="grid grid-cols-2 gap-2 text-[10px] pt-2.5">
                                 <div>
-                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">Waiter</span>
-                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{sess.collectedBy || "Unknown"}</span>
+                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    Waiter
+                                  </span>
+                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                                    {sess.collectedBy || "Unknown"}
+                                  </span>
                                 </div>
                                 <div>
-                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">Payment</span>
-                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">{sess.paymentMethod || "Cash"}</span>
+                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    Payment
+                                  </span>
+                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                                    {sess.paymentMethod || "Cash"}
+                                  </span>
                                 </div>
                                 <div>
-                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">Customer</span>
-                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300 truncate block">{getGuestNames(sess)}</span>
+                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    Customer
+                                  </span>
+                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300 truncate block">
+                                    {getGuestNames(sess)}
+                                  </span>
                                 </div>
                                 <div>
-                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">Phone</span>
-                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300 font-mono">{getGuestPhones(sess) || "—"}</span>
+                                  <span className="text-[8.5px] font-bold text-zinc-400 uppercase tracking-wider block">
+                                    Phone
+                                  </span>
+                                  <span className="font-semibold text-zinc-700 dark:text-zinc-300 font-mono">
+                                    {getGuestPhones(sess) || "—"}
+                                  </span>
                                 </div>
                               </div>
                               {sess.items && sess.items.length > 0 && (
                                 <div className="space-y-1 pt-1.5 border-t border-black/[0.04] dark:border-zinc-800">
-                                  <p className="text-[8.5px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">Items ({sess.items.length})</p>
+                                  <p className="text-[8.5px] font-black text-zinc-400 uppercase tracking-widest mb-1.5">
+                                    Items ({sess.items.length})
+                                  </p>
                                   {sess.items.map((it: any, itIdx: number) => (
-                                    <div key={itIdx} className="flex justify-between text-[10px]">
+                                    <div
+                                      key={itIdx}
+                                      className="flex justify-between text-[10px]"
+                                    >
                                       <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-                                        <span className="font-bold text-zinc-400 mr-0.5">{it.qty || it.quantity}×</span> {it.name}
+                                        <span className="font-bold text-zinc-400 mr-0.5">
+                                          {it.qty || it.quantity}×
+                                        </span>{" "}
+                                        {it.name}
                                       </span>
-                                      <span className="font-semibold text-zinc-700 dark:text-zinc-300">₹{(it.qty || it.quantity) * (it.price || 0)}</span>
+                                      <span className="font-semibold text-zinc-700 dark:text-zinc-300">
+                                        ₹
+                                        {(it.qty || it.quantity) *
+                                          (it.price || 0)}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
@@ -1449,12 +1349,12 @@ export default function TablesClient() {
                                     className="relative w-24 h-24 flex items-center justify-center group"
                                   >
                                     {/* Chairs placed absolute around the table shape */}
-                                    {renderChairs(
-                                      table.capacity,
-                                      table.shape,
-                                      tableActiveCount,
-                                      tablePendingCount,
-                                    )}
+                                    <ChairsRenderer
+                                      capacity={table.capacity}
+                                      shape={table.shape}
+                                      activeCount={tableActiveCount}
+                                      pendingCount={tablePendingCount}
+                                    />
 
                                     {/* Main Table shape */}
                                     <button
@@ -1512,9 +1412,16 @@ export default function TablesClient() {
                                           👤 {totalGuestCount}/{table.capacity}
                                         </span>
                                       ) : (
-                                        <span className="text-[8px] text-[#0A0A0F]/30 font-bold uppercase mt-0.5">
-                                          {table.capacity}p
-                                        </span>
+                                        <div className="flex flex-col items-center">
+                                          <span className="text-[8.5px] text-[#0A0A0F]/30 font-bold uppercase mt-0.5">
+                                            {table.capacity}p
+                                          </span>
+                                          {table.bookingPrice > 0 && (
+                                            <span className="text-[8px] font-black text-[#FF6A00] mt-0.5 leading-none">
+                                              ₹{table.bookingPrice}
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                     </button>
 
@@ -1578,6 +1485,11 @@ export default function TablesClient() {
                                   ? `${tableSessions.reduce((sum, s) => sum + (s.guestCount ? Number(s.guestCount) : 1), 0)} / ${table.capacity} occupied`
                                   : `${table.capacity} seats`}
                               </span>
+                              {table.bookingPrice > 0 && (
+                                <span className="text-[10px] text-[#FF6A00] font-black bg-orange-50 dark:bg-orange-950/20 border border-orange-100/30 px-1.5 py-0.2 rounded">
+                                  ₹{table.bookingPrice}
+                                </span>
+                              )}
                               <span
                                 className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${isActive ? (tableSessions.some((s) => s.status === "pending") ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-emerald-50 text-emerald-600 border border-emerald-100") : "bg-zinc-50 text-zinc-400 border border-zinc-100"}`}
                               >
@@ -1918,30 +1830,128 @@ export default function TablesClient() {
               isOpen={!!selectedTableId}
               onClose={() => setSelectedTableId(null)}
               title={
-                groupTables.length > 1
-                  ? `${joinedNames} Details`
-                  : `${detailTable.name} Details`
+                isEditingTable
+                  ? `Edit Table: ${detailTable.name}`
+                  : groupTables.length > 1
+                    ? `${joinedNames} Details`
+                    : `${detailTable.name} Details`
               }
               subtitle={
-                groupTables.length > 1
-                  ? `${groupTables.reduce((acc, t) => acc + t.capacity, 0)} Seats Total (${groupSessions.reduce((sum, s) => sum + (s.guestCount ? Number(s.guestCount) : 1), 0)} occupied) · ${
-                      groupSessions.length > 0
-                        ? groupSessions.some((s) => s.status === "pending")
-                          ? "Pending Approval"
-                          : "Active Session"
-                        : "Empty"
-                    }`
-                  : `${detailTable.capacity} Seats (${groupSessions.reduce((sum, s) => sum + (s.guestCount ? Number(s.guestCount) : 1), 0)} occupied) · ${
-                      groupSessions.length > 0
-                        ? groupSessions.some((s) => s.status === "pending")
-                          ? "Pending Approval"
-                          : "Active Session"
-                        : "Empty"
-                    }`
+                isEditingTable
+                  ? "Update table configuration including shape, capacity, and booking price."
+                  : groupTables.length > 1
+                    ? `${groupTables.reduce((acc, t) => acc + t.capacity, 0)} Seats Total (${groupSessions.reduce((sum, s) => sum + (s.guestCount ? Number(s.guestCount) : 1), 0)} occupied) · ${
+                        groupSessions.length > 0
+                          ? groupSessions.some((s) => s.status === "pending")
+                            ? "Pending Approval"
+                            : "Active Session"
+                          : "Empty"
+                      }`
+                    : `${detailTable.capacity} Seats (${groupSessions.reduce((sum, s) => sum + (s.guestCount ? Number(s.guestCount) : 1), 0)} occupied) · ${detailTable.bookingPrice ? `₹${detailTable.bookingPrice} Booking Price` : "Free Booking"} · ${
+                        groupSessions.length > 0
+                          ? groupSessions.some((s) => s.status === "pending")
+                            ? "Pending Approval"
+                            : "Active Session"
+                          : "Empty"
+                      }`
               }
               maxWidth="max-w-3xl"
             >
-              <div className="space-y-4 pt-1 text-left">
+              {isEditingTable ? (
+                <div className="space-y-4 pt-1 text-left animate-in fade-in duration-200">
+                  <div className="bg-white dark:bg-zinc-900 border border-black/[0.05] dark:border-zinc-800 rounded-md p-4 space-y-3.5">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-550 uppercase tracking-wider">
+                        Table Name
+                      </label>
+                      <input
+                        type="text"
+                        value={editForm.name}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, name: e.target.value })
+                        }
+                        className="w-full h-8.5 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-955 text-xs font-medium outline-none focus:border-[#FF6A00]/40 focus:bg-white dark:focus:bg-zinc-900 text-[#0A0A0F] dark:text-zinc-200 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">
+                        Capacity (Seats)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={editForm.capacity}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, capacity: e.target.value })
+                        }
+                        className="w-full h-8.5 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-955 text-xs font-medium outline-none focus:border-[#FF6A00]/40 focus:bg-white dark:focus:bg-zinc-900 text-[#0A0A0F] dark:text-zinc-200 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider font-semibold block mb-1">
+                        Shape
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, shape: "round" })}
+                          className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
+                            editForm.shape === "round"
+                              ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
+                              : "bg-zinc-50 dark:bg-zinc-955 border border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20"
+                          }`}
+                        >
+                          Round
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, shape: "rectangle" })}
+                          className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
+                            editForm.shape === "rectangle"
+                              ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-955 shadow-2xs"
+                              : "bg-zinc-50 dark:bg-zinc-955 border border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20"
+                          }`}
+                        >
+                          Rectangle
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-400 dark:text-zinc-555 uppercase tracking-wider">
+                        Booking Price (₹)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editForm.bookingPrice}
+                        onChange={(e) =>
+                          setEditForm({ ...editForm, bookingPrice: e.target.value })
+                        }
+                        className="w-full h-8.5 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-955 text-xs font-medium outline-none focus:border-[#FF6A00]/40 focus:bg-white dark:focus:bg-zinc-900 text-[#0A0A0F] dark:text-zinc-200 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-black/[0.05] dark:border-zinc-800 flex justify-end gap-2.5">
+                    <Button
+                      variant="outline"
+                      className="h-9 px-4 text-xs font-bold"
+                      onClick={() => setIsEditingTable(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="dark"
+                      className="h-9 px-6 text-xs font-bold shadow-sm"
+                      onClick={handleSaveTableEdit}
+                    >
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 pt-1 text-left animate-in fade-in duration-200">
                 {/* Top Section: Table Meta & Actions (Merge, QR Code) */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {/* Table Merge Control */}
@@ -2331,7 +2341,16 @@ export default function TablesClient() {
                 </div>
 
                 {/* Dialog footer actions */}
-                <div className="pt-2 border-t border-black/[0.05] dark:border-zinc-800 flex justify-end">
+                <div className="pt-2 border-t border-black/[0.05] dark:border-zinc-800 flex justify-end gap-2.5">
+                  {groupTables.length === 1 && (
+                    <Button
+                      variant="outline"
+                      className="h-9 px-4 text-xs font-bold"
+                      onClick={() => setIsEditingTable(true)}
+                    >
+                      Edit Table
+                    </Button>
+                  )}
                   <Button
                     variant="dark"
                     className="h-9 px-6 text-xs font-bold shadow-sm"
@@ -2341,7 +2360,8 @@ export default function TablesClient() {
                   </Button>
                 </div>
               </div>
-            </Dialog>
+            )}
+          </Dialog>
           );
         })()}
       {/* Confirmation Dialog */}
@@ -2447,6 +2467,21 @@ export default function TablesClient() {
             </div>
           </div>
         </Dialog>
+      )}
+
+      {/* Floating Exit Fullscreen Button (only needed in standalone portal mode) */}
+      {isFullscreen && isPortal && (
+        <button
+          onClick={() => {
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch((err) => console.log(err));
+            }
+          }}
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          title="Exit Fullscreen"
+        >
+          <Minimize2 size={16} />
+        </button>
       )}
     </div>
   );

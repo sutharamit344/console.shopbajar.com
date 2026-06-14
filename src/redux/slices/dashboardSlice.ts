@@ -8,6 +8,7 @@ import {
   fetchMasterFeatures,
   purchaseMerchantFeature,
   toggleMerchantFeature,
+  fetchShopPayments,
 } from "../thunks/dashboardThunks";
 
 interface HourDetail {
@@ -38,6 +39,8 @@ interface DashboardState {
   loadingReviews: boolean;
   loadingFeatures: boolean;
   activatingFeatureKey: string | null;
+  payments: any[];
+  loadingPayments: boolean;
   error: string | null;
 }
 
@@ -62,6 +65,8 @@ const initialState: DashboardState = {
   loadingReviews: false,
   loadingFeatures: false,
   activatingFeatureKey: null,
+  payments: [],
+  loadingPayments: false,
   error: null,
 };
 
@@ -171,6 +176,18 @@ export const dashboardSlice = createSlice({
         if (state.shop) {
           state.shop.paidFeatures = action.payload.nextPaidFeatures;
         }
+      })
+      // Fetch Shop Payments
+      .addCase(fetchShopPayments.pending, (state) => {
+        state.loadingPayments = true;
+      })
+      .addCase(fetchShopPayments.fulfilled, (state, action) => {
+        state.loadingPayments = false;
+        state.payments = action.payload;
+      })
+      .addCase(fetchShopPayments.rejected, (state, action) => {
+        state.loadingPayments = false;
+        state.error = action.payload || "Failed to fetch payments";
       });
   },
 });

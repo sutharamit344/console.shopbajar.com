@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, Link } from "react-router-dom";
 import { useShopOwner } from "@/hooks/useShopOwner";
-import { MAIN_APP_URL, getCustomerAppUrl } from "@/lib/config";
+import { getCustomerAppUrl } from "@/lib/config";
 import {
   listenAllOrders,
   listenSessions,
   updateOrderStatus,
   updateOrderItemStatus,
-  updateSessionStatus,
-  closeSession,
-  approveSession,
 } from "@/lib/rtdb";
 import Card from "@/components/UI/Card";
 import Button from "@/components/UI/Button";
@@ -33,6 +36,8 @@ import {
   Store,
   ArrowRight,
   Calculator,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 // ── Order Status Config ───────────────────────────────────────────
@@ -90,6 +95,21 @@ export default function KitchenClient() {
   const [orders, setOrders] = useState<any[]>([]); // all orders, flat list
   const [sessions, setSessions] = useState<any[]>([]); // all sessions
   const [notifEnabled, setNotifEnabled] = useState<boolean>(false);
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "new" | "ready" | "served"
+  >("all");
+
+  // Fullscreen state detection
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const prevOrderIds = useRef<Set<string>>(new Set());
   const prevPendingIds = useRef<Set<string>>(new Set());
@@ -237,29 +257,77 @@ export default function KitchenClient() {
   };
 
   // Filter active orders based on whether their session is approved/active
-  const activeOrders = orders.filter((o) => {
-    const session = sessions.find((s) => s.id === o.sessionId);
-    return (
-      session && session.status === "active"
-    );
-  });
-  const pendingSessions = sessions.filter((s) => s.status === "pending");
-  const activeSessions = sessions.filter((s) => s.status === "active");
-  const doneOrders = activeOrders.filter((o) => o.status === "served");
+  const activeOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const session = sessions.find((s) => s.id === o.sessionId);
+      return session && session.status === "active";
+    });
+  }, [orders, sessions]);
+
+  const pendingSessions = useMemo(() => {
+    return sessions.filter((s) => s.status === "pending");
+  }, [sessions]);
+
+  const activeSessions = useMemo(() => {
+    return sessions.filter((s) => s.status === "active");
+  }, [sessions]);
+
+  const doneOrders = useMemo(() => {
+    return activeOrders.filter((o) => o.status === "served");
+  }, [activeOrders]);
+
+  // Filtered active orders for tab display
+  const filteredActiveOrders = useMemo(() => {
+    if (statusFilter === "all") return activeOrders;
+    if (statusFilter === "new") {
+      return activeOrders.filter(
+        (o) =>
+          o.status === "placed" ||
+          o.status === "confirmed" ||
+          o.status === "preparing",
+      );
+    }
+    if (statusFilter === "ready") {
+      return activeOrders.filter((o) => o.status === "ready");
+    }
+    if (statusFilter === "served") {
+      return activeOrders.filter((o) => o.status === "served");
+    }
+    return activeOrders;
+  }, [activeOrders, statusFilter]);
 
   // Group active orders by sessionId
-  const ordersBySession = activeOrders.reduce((acc, order) => {
-    const key = order.sessionId;
-    if (!acc[key])
-      acc[key] = {
-        tableName: order.tableName,
-        tableId: order.tableId,
-        sessionId: key,
-        orders: [],
-      };
-    acc[key].orders.push(order);
-    return acc;
-  }, {});
+  const ordersBySession = useMemo(() => {
+    return filteredActiveOrders.reduce((acc: any, order: any) => {
+      const key = order.sessionId;
+      if (!acc[key])
+        acc[key] = {
+          tableName: order.tableName,
+          tableId: order.tableId,
+          sessionId: key,
+          orders: [],
+        };
+      acc[key].orders.push(order);
+      return acc;
+    }, {});
+  }, [filteredActiveOrders]);
+
+  // Counts for tabs
+  const allCount = activeOrders.length;
+  const newCount = useMemo(() => {
+    return activeOrders.filter(
+      (o) =>
+        o.status === "placed" ||
+        o.status === "confirmed" ||
+        o.status === "preparing",
+    ).length;
+  }, [activeOrders]);
+  const readyCount = useMemo(() => {
+    return activeOrders.filter((o) => o.status === "ready").length;
+  }, [activeOrders]);
+  const servedCount = useMemo(() => {
+    return activeOrders.filter((o) => o.status === "served").length;
+  }, [activeOrders]);
 
   if (shopLoading) {
     return (
@@ -285,7 +353,7 @@ export default function KitchenClient() {
               variant="dark"
               className="mt-6"
               onClick={() =>
-                (window.location.href = getCustomerAppUrl('/dashboard'))
+                (window.location.href = getCustomerAppUrl("/dashboard"))
               }
             >
               Go to Dashboard
@@ -367,7 +435,7 @@ export default function KitchenClient() {
                   variant="ghost"
                   className="text-xs h-9 font-bold"
                   onClick={() =>
-                    (window.location.href = getCustomerAppUrl('/dashboard'))
+                    (window.location.href = getCustomerAppUrl("/dashboard"))
                   }
                 >
                   Back to Dashboard
@@ -377,7 +445,9 @@ export default function KitchenClient() {
                   icon={ArrowRight}
                   className="text-xs h-9 shadow-sm font-bold"
                   onClick={() =>
-                    (window.location.href = getCustomerAppUrl(`/dashboard/manage?id=${shop.id}&view=features`))
+                    (window.location.href = getCustomerAppUrl(
+                      `/dashboard/manage?id=${shop.id}&view=features`,
+                    ))
                   }
                 >
                   Upgrade & Activate Add-on
@@ -393,80 +463,102 @@ export default function KitchenClient() {
   return (
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 text-zinc-900 dark:text-zinc-150 transition-colors duration-200">
       <div className="w-full px-4 md:px-8 py-4">
-        {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Link
-              to={`${isPortal ? "/portal" : ""}/tables?shopId=${shop.id}`}
-              className="w-7 h-7 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 transition-colors shadow-sm shrink-0"
-            >
-              <ArrowLeft size={13} />
-            </Link>
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                {shop.name}
-              </span>
-              {activeOrders.length > 0 && (
-                <span className="text-[9px] font-black bg-[#FF6A00]/10 text-[#FF6A00] px-1.5 py-0.5 rounded border border-[#FF6A00]/15 shrink-0 animate-pulse">
-                  {activeOrders.length} ACTIVE
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Right actions: Notification toggle & Waiter Link */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* Copy Staff Portal Link Button (Only for Owner) */}
-            {!isPortal && (
-              <button
-                type="button"
-                onClick={() => {
-                  const staffUrl = `${window.location.origin}/portal/kitchen?shopId=${shop.id}`;
-                  navigator.clipboard.writeText(staffUrl);
-                  alert(
-                    "Copied Staff Kitchen Link to clipboard!\nShare this with your staff. PIN: " +
-                      (shop.staffPin || "1234"),
-                  );
-                }}
-                className="h-8 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
-              >
-                <ShoppingBag size={12} className="text-zinc-400" />
-                <span className="hidden md:inline">Share Staff URL</span>
-              </button>
-            )}
-
+        {/* Status Filter Tabs & Quick Actions Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 shrink-0">
+          {/* Status Filter Tabs */}
+          <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200/80 dark:border-zinc-800 shadow-3xs max-w-md w-full sm:w-auto">
             <button
-              onClick={notifEnabled ? undefined : requestNotifications}
-              className={`h-8 px-2.5 sm:px-3 rounded-md border text-[11px] font-bold flex items-center gap-1.5 transition-all shrink-0 ${
-                notifEnabled
-                  ? "border-emerald-250 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-600 dark:text-emerald-400"
-                  : "border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-150 hover:bg-zinc-50 dark:hover:bg-zinc-700"
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                statusFilter === "all"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
               }`}
             >
-              {notifEnabled ? <Bell size={11} /> : <BellOff size={11} />}
-              <span className="hidden xs:inline">
-                {notifEnabled ? "On" : "Alerts"}
+              <span>All Active</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "all" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+                {allCount}
               </span>
             </button>
-
-            <Link
-              to={`${isPortal ? "/portal" : ""}/waiter?shopId=${shop.id}`}
-              className="h-8 px-2.5 sm:px-3 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0"
+            <button
+              type="button"
+              onClick={() => setStatusFilter("new")}
+              className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                statusFilter === "new"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
+              }`}
             >
-              <Bell size={11} className="text-[#FF6A00]" />
-              <span className="hidden xs:inline">Waiter</span>
-            </Link>
-
-            {hasBilling && (
-              <Link
-                to={`${isPortal ? "/portal" : ""}/billing?shopId=${shop.id}`}
-                className="h-8 px-2.5 sm:px-3 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-105 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0"
-                title="Billing & POS Console"
-              >
-                <Calculator size={11} className="text-[#FF6A00]" />
-                <span className="hidden xs:inline">Billing</span>
-              </Link>
-            )}
+              <span>New</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "new" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+                {newCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("ready")}
+              className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                statusFilter === "ready"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
+              }`}
+            >
+              <span>Ready</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "ready" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+                {readyCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("served")}
+              className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                statusFilter === "served"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
+              }`}
+            >
+              <span>Served</span>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "served" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+                {servedCount}
+              </span>
+            </button>
+          </div>
+ 
+          {/* Quick actions (Alerts, Fullscreen) */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <button
+              type="button"
+              onClick={notifEnabled ? undefined : requestNotifications}
+              className={`h-8 px-3 rounded-md border text-[11px] font-bold flex items-center gap-1.5 transition-all shrink-0 cursor-pointer shadow-3xs ${
+                notifEnabled
+                  ? "border-emerald-250 bg-emerald-50 dark:bg-emerald-955/20 text-emerald-600 dark:text-emerald-400"
+                  : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-150 hover:bg-zinc-50 dark:hover:bg-zinc-805"
+              }`}
+              title={notifEnabled ? "Sound Alerts Enabled" : "Enable Sound Alerts"}
+            >
+              {notifEnabled ? <Bell size={11} /> : <BellOff size={11} />}
+              <span>{notifEnabled ? "Alerts On" : "Enable Alerts"}</span>
+            </button>
+ 
+            <button
+              type="button"
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen().catch((err) => {
+                    console.error("Failed to enter fullscreen:", err);
+                  });
+                } else {
+                  document.exitFullscreen().catch((err) => {
+                    console.error("Failed to exit fullscreen:", err);
+                  });
+                }
+              }}
+              className="h-8 w-8 rounded-md border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex items-center justify-center text-zinc-650 hover:text-zinc-900 dark:text-zinc-355 dark:hover:text-white hover:bg-zinc-50 dark:hover:bg-zinc-850 transition-all shadow-3xs shrink-0 cursor-pointer"
+              title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            >
+              {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            </button>
           </div>
         </div>
 
@@ -478,11 +570,18 @@ export default function KitchenClient() {
               className="mx-auto text-[#0A0A0F]/10 dark:text-zinc-700 mb-4"
             />
             <h3 className="text-[15px] font-bold text-[#0A0A0F] dark:text-zinc-200 mb-1">
-              No active orders
+              {statusFilter === "all"
+                ? "No active orders"
+                : statusFilter === "new"
+                  ? "No new orders"
+                  : statusFilter === "ready"
+                    ? "No ready orders"
+                    : "No served orders"}
             </h3>
             <p className="text-[13px] text-[#0A0A0F]/40 dark:text-zinc-500 font-medium">
-              Orders will appear here when customers scan their table QR and
-              place orders.
+              {statusFilter === "all"
+                ? "Orders will appear here when customers scan their table QR and place orders."
+                : `There are no orders with status "${statusFilter}" at the moment.`}
             </p>
           </div>
         ) : (
@@ -494,9 +593,16 @@ export default function KitchenClient() {
                 );
 
                 // Calculate table status for neon indicator dots
-                const hasPlaced = sessionOrders.some((o: any) => o.status === "placed");
-                const hasPreparing = sessionOrders.some((o: any) => o.status === "preparing" || o.status === "confirmed");
-                const hasReady = sessionOrders.some((o: any) => o.status === "ready");
+                const hasPlaced = sessionOrders.some(
+                  (o: any) => o.status === "placed",
+                );
+                const hasPreparing = sessionOrders.some(
+                  (o: any) =>
+                    o.status === "preparing" || o.status === "confirmed",
+                );
+                const hasReady = sessionOrders.some(
+                  (o: any) => o.status === "ready",
+                );
 
                 let dotColor = "";
                 let pingColor = "";
@@ -517,8 +623,12 @@ export default function KitchenClient() {
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         {dotColor && (
                           <span className="relative flex h-2 w-2 shrink-0">
-                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pingColor}`} />
-                            <span className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`} />
+                            <span
+                              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${pingColor}`}
+                            />
+                            <span
+                              className={`relative inline-flex rounded-full h-2 w-2 ${dotColor}`}
+                            />
                           </span>
                         )}
                         <Table2
@@ -569,7 +679,8 @@ export default function KitchenClient() {
                                       <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                                     </span>
                                   )}
-                                  {(order.status === "preparing" || order.status === "confirmed") && (
+                                  {(order.status === "preparing" ||
+                                    order.status === "confirmed") && (
                                     <span className="relative flex h-2 w-2 shrink-0">
                                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                                       <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
@@ -951,6 +1062,21 @@ export default function KitchenClient() {
           </Dialog>
         )}
       </div>
+
+      {/* Floating Exit Fullscreen Button (only needed in standalone portal mode) */}
+      {isFullscreen && isPortal && (
+        <button
+          onClick={() => {
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch((err) => console.log(err));
+            }
+          }}
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          title="Exit Fullscreen"
+        >
+          <Minimize2 size={16} />
+        </button>
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useNavigate, Link } from "react-router-dom";
 import { useShopOwner } from "@/hooks/useShopOwner";
 import { DOMAIN, MAIN_APP_URL, getCustomerAppUrl } from "@/lib/config";
+import { createBill } from "@/lib/db";
 import {
   listenTables,
   listenSessions,
@@ -37,6 +38,8 @@ import {
   Calculator,
   Search,
   ChevronRight,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 
 export default function WaiterClient() {
@@ -46,20 +49,40 @@ export default function WaiterClient() {
   const isPortal = window.location.pathname.startsWith("/portal");
   const [shop, setShop] = useState<any>(null);
 
+  // Fullscreen state detection
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
+
   const [tables, setTables] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [orders, setOrders] = useState<any[]>([]);
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("tables"); // "tables" | "deliver" | "approvals"
   const [servingItemId, setServingItemId] = useState<any>(null); // { orderId, itemIndex }
-  const [servingGroupSessionId, setServingGroupSessionId] = useState<string | null>(null);
+  const [servingGroupSessionId, setServingGroupSessionId] = useState<
+    string | null
+  >(null);
   const [revertingItemId, setRevertingItemId] = useState<any>(null); // { orderId, itemIndex }
   const [checkoutLoading, setCheckoutLoading] = useState<boolean>(false);
   const [confirmAction, setConfirmAction] = useState<any>(null); // { message, onConfirm }
   const [waiterName, setWaiterName] = useState<string>("");
   const [paymentMethod, setPaymentMethod] = useState<string>("Cash");
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("");
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(
+    null,
+  );
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
+  const [dialogTab, setDialogTab] = useState<"checkout" | "orders">("checkout");
 
   useEffect(() => {
     if (shop?.id) {
@@ -90,6 +113,106 @@ export default function WaiterClient() {
       unsubOrders();
     };
   }, [shop?.id]);
+
+  // Filter sessions
+  const activeSessions = sessions.filter((s) => s.status === "active");
+  const pendingSessions = sessions.filter((s) => s.status === "pending");
+
+  // Get selected table and its active session/orders
+  const selectedTable = tables.find((t) => t.id === selectedTableId);
+
+  const groupActiveSessions = selectedTable
+    ? (() => {
+        const targetTableId = selectedTable.mergedInto || selectedTable.id;
+        const groupTables = tables.filter(
+          (t) => (t.mergedInto || t.id) === targetTableId,
+        );
+        const matched = activeSessions.filter((s) =>
+          groupTables.some((gt) => gt.id === s.tableId),
+        );
+        if (selectedTable.currentSessionId) {
+          const sess = activeSessions.find(
+            (s) => s.id === selectedTable.currentSessionId,
+          );
+          if (sess && !matched.some((m) => m.id === sess.id)) {
+            matched.push(sess);
+          }
+        }
+        return matched;
+      })()
+    : [];
+
+  useEffect(() => {
+    if (selectedTableId) {
+      setDialogTab("checkout");
+      if (groupActiveSessions.length > 0) {
+        if (
+          !selectedSessionId ||
+          !groupActiveSessions.some((s) => s.id === selectedSessionId)
+        ) {
+          setSelectedSessionId(groupActiveSessions[0].id);
+        }
+      } else {
+        setSelectedSessionId(null);
+      }
+    } else {
+      setSelectedSessionId(null);
+    }
+  }, [selectedTableId, groupActiveSessions, selectedSessionId]);
+
+  const activeTableSession =
+    groupActiveSessions.find((s) => s.id === selectedSessionId) ||
+    groupActiveSessions[0] ||
+    null;
+
+  const activeTableOrders = activeTableSession
+    ? orders.filter((o) => o.sessionId === activeTableSession.id)
+    : [];
+
+  // Consolidate bill quantities for details panel
+  const billSummaryItems = {};
+  activeTableOrders.forEach((order) => {
+    if (order.status === "cancelled") return;
+    order.items?.forEach((item: any) => {
+      const price = parseFloat(item.price || 0);
+      if (billSummaryItems[item.name]) {
+        billSummaryItems[item.name].qty += parseInt(item.qty || 1);
+      } else {
+        billSummaryItems[item.name] = {
+          name: item.name,
+          price: price,
+          qty: parseInt(item.qty || 1),
+        };
+      }
+    });
+  });
+
+  const billItemsArray = Object.values(billSummaryItems) as any[];
+  const billGrandTotal = billItemsArray.reduce(
+    (sum: number, item: any) => sum + item.price * item.qty,
+    0,
+  );
+
+  // Group served items by name for inline reversion
+  const servedInstancesByName: { [itemName: string]: any[] } = {};
+  activeTableOrders.forEach((order) => {
+    if (order.status === "cancelled") return;
+    order.items?.forEach((item: any, idx: number) => {
+      if (item.status === "served") {
+        if (!servedInstancesByName[item.name]) {
+          servedInstancesByName[item.name] = [];
+        }
+        servedInstancesByName[item.name].push({
+          orderId: order.id,
+          sessionId: order.sessionId,
+          itemIndex: idx,
+          name: item.name,
+          qty: item.qty,
+          status: item.status,
+        });
+      }
+    });
+  });
 
   const getSessionCode = (sid) => {
     if (!sid) return "";
@@ -125,10 +248,6 @@ export default function WaiterClient() {
     return session.customerPhone || "";
   };
 
-  // Filter sessions
-  const activeSessions = sessions.filter((s) => s.status === "active");
-  const pendingSessions = sessions.filter((s) => s.status === "pending");
-
   // Determine items that are "Ready to Serve"
   const readyToServeItems: any[] = [];
   orders.forEach((order) => {
@@ -153,12 +272,14 @@ export default function WaiterClient() {
   });
 
   // Group ready to serve items by session (representing table + session)
-  const groupedReadyItems: { [sessionId: string]: {
-    sessionId: string;
-    tableName: string;
-    customerName: string;
-    items: any[];
-  }} = {};
+  const groupedReadyItems: {
+    [sessionId: string]: {
+      sessionId: string;
+      tableName: string;
+      customerName: string;
+      items: any[];
+    };
+  } = {};
 
   readyToServeItems.forEach((item) => {
     if (!groupedReadyItems[item.sessionId]) {
@@ -230,8 +351,8 @@ export default function WaiterClient() {
             item.orderId,
             item.itemIndex,
             "served",
-          )
-        )
+          ),
+        ),
       );
     } catch (err) {
       console.error("Failed to serve group:", err);
@@ -484,12 +605,54 @@ export default function WaiterClient() {
           // Print POS Receipt
           handlePrintSlip(session, activeTableOrders);
 
-          // Close session in DB with checkout summary metadata
+          // Close session in RTDB with checkout summary metadata
           await closeSession(shop.id, session.id, session.tableId, {
             collectedBy: finalWaiterName,
             paymentMethod: finalPaymentMethod,
             billAmount: billGrandTotal,
             items: billItemsArray,
+          });
+
+          // ── Save as a paid bill in Billing & POS (Firestore) ──
+          // Build bill number: QR-<tableId>-<timestamp last 6>
+          const ts = Date.now();
+          const billNumber = `QR-${(session.tableName || "T").replace(/\s+/g, "").toUpperCase()}-${String(ts).slice(-6)}`;
+
+          const subtotal = billItemsArray.reduce(
+            (sum, item) =>
+              sum + (Number(item.price) || 0) * (Number(item.qty) || 1),
+            0,
+          );
+
+          await createBill({
+            shopId: shop.id,
+            shopName: shop.name || "",
+            ownerId: shop.ownerId || "",
+            billNumber,
+            customerName: getGuestNames(session),
+            customerPhone: getGuestPhones(session) || "",
+            customerEmail: "",
+            customerGst: "",
+            billingAddress: "",
+            notes: `Table: ${session.tableName} · Waiter: ${finalWaiterName} · Session: ${session.id}`,
+            paymentMethod: finalPaymentMethod,
+            discount: 0,
+            taxPercent: 0,
+            taxAmount: 0,
+            subtotal,
+            totalAmount: billGrandTotal,
+            status: "paid",
+            source: "qr_table_checkout",
+            tableId: session.tableId,
+            tableName: session.tableName,
+            sessionId: session.id,
+            collectedBy: finalWaiterName,
+            items: billItemsArray.map((item) => ({
+              name: item.name || "",
+              category: item.category || "Table Order",
+              quantity: Number(item.qty) || 1,
+              price: Number(item.price) || 0,
+            })),
           });
 
           // Cache waiter name for convenience
@@ -538,7 +701,7 @@ export default function WaiterClient() {
               variant="dark"
               className="mt-6"
               onClick={() =>
-                (window.location.href = getCustomerAppUrl('/dashboard'))
+                (window.location.href = getCustomerAppUrl("/dashboard"))
               }
             >
               Go to Dashboard
@@ -587,7 +750,7 @@ export default function WaiterClient() {
                   variant="ghost"
                   className="text-xs h-9 font-bold"
                   onClick={() =>
-                    (window.location.href = getCustomerAppUrl('/dashboard'))
+                    (window.location.href = getCustomerAppUrl("/dashboard"))
                   }
                 >
                   Back to Dashboard
@@ -597,7 +760,9 @@ export default function WaiterClient() {
                   icon={Check}
                   className="text-xs h-9 shadow-sm font-bold"
                   onClick={() =>
-                    (window.location.href = getCustomerAppUrl(`/dashboard/manage?id=${shop.id}&view=features`))
+                    (window.location.href = getCustomerAppUrl(
+                      `/dashboard/manage?id=${shop.id}&view=features`,
+                    ))
                   }
                 >
                   Upgrade & Activate Add-on
@@ -610,68 +775,11 @@ export default function WaiterClient() {
     );
   }
 
-  // Get selected table and its active session/orders
-  const selectedTable = tables.find((t) => t.id === selectedTableId);
-  const activeTableSession = selectedTable
-    ? selectedTable.currentSessionId
-      ? activeSessions.find((s) => s.id === selectedTable.currentSessionId)
-      : activeSessions.find((s) => s.tableId === selectedTable.id && s.status === "active")
-    : null;
-
-  const activeTableOrders = activeTableSession
-    ? orders.filter((o) => o.sessionId === activeTableSession.id)
-    : [];
-
-  // Consolidate bill quantities for details panel
-  const billSummaryItems = {};
-  activeTableOrders.forEach((order) => {
-    if (order.status === "cancelled") return;
-    order.items?.forEach((item: any) => {
-      const price = parseFloat(item.price || 0);
-      if (billSummaryItems[item.name]) {
-        billSummaryItems[item.name].qty += parseInt(item.qty || 1);
-      } else {
-        billSummaryItems[item.name] = {
-          name: item.name,
-          price: price,
-          qty: parseInt(item.qty || 1),
-        };
-      }
-    });
-  });
-
-  const billItemsArray = Object.values(billSummaryItems) as any[];
-  const billGrandTotal = billItemsArray.reduce(
-    (sum: number, item: any) => sum + item.price * item.qty,
-    0,
-  );
-
-  // Group served items by name for inline reversion
-  const servedInstancesByName: { [itemName: string]: any[] } = {};
-  activeTableOrders.forEach((order) => {
-    if (order.status === "cancelled") return;
-    order.items?.forEach((item: any, idx: number) => {
-      if (item.status === "served") {
-        if (!servedInstancesByName[item.name]) {
-          servedInstancesByName[item.name] = [];
-        }
-        servedInstancesByName[item.name].push({
-          orderId: order.id,
-          sessionId: order.sessionId,
-          itemIndex: idx,
-          name: item.name,
-          qty: item.qty,
-          status: item.status,
-        });
-      }
-    });
-  });
-
   return (
-    <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-950 text-zinc-900 dark:text-zinc-150 pb-24 sm:pb-6 transition-colors duration-200">
+    <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-955 text-zinc-900 dark:text-zinc-150 pb-24 sm:pb-6 transition-colors duration-200">
       <div className="w-full px-4 md:px-8 py-4">
-        {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
-        <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
+        {!isFullscreen && (
+          <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
           <div className="flex items-center gap-2.5 min-w-0">
             <Link
               to={`${isPortal ? "/portal" : ""}/tables?shopId=${shop.id}`}
@@ -729,8 +837,28 @@ export default function WaiterClient() {
                 <span className="hidden xs:inline">Billing</span>
               </Link>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!document.fullscreenElement) {
+                  document.documentElement.requestFullscreen().catch((err) => {
+                    console.error("Failed to enter fullscreen:", err);
+                  });
+                } else {
+                  document.exitFullscreen().catch((err) => {
+                    console.error("Failed to exit fullscreen:", err);
+                  });
+                }
+              }}
+              className="h-8 w-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all shadow-sm shrink-0 cursor-pointer"
+              title="Enter Fullscreen"
+            >
+              <Maximize2 size={13} />
+            </button>
           </div>
         </div>
+      )}
 
         {/* Mobile-First Tab Navigation (Fixed to bottom on mobile, inline at top on desktop) */}
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-black/[0.08] dark:border-zinc-850 p-2.5 flex items-center gap-1 shadow-lg sm:relative sm:bottom-auto sm:left-auto sm:right-auto sm:z-auto sm:bg-zinc-150 sm:dark:bg-zinc-900 sm:border sm:border-black/[0.05] sm:dark:border-zinc-800 sm:p-1 sm:rounded-md sm:mb-6 sm:shadow-none">
@@ -756,7 +884,6 @@ export default function WaiterClient() {
               badge: pendingSessions.length,
               badgeColor: "bg-[#FF6A00] text-white",
             },
-
           ].map((tab) => {
             const TabIcon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -894,7 +1021,8 @@ export default function WaiterClient() {
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {groupedReadyList.map((group, groupIdx) => {
-                    const isGroupServing = servingGroupSessionId === group.sessionId;
+                    const isGroupServing =
+                      servingGroupSessionId === group.sessionId;
                     return (
                       <div
                         key={groupIdx}
@@ -940,7 +1068,9 @@ export default function WaiterClient() {
                                 className="flex items-center justify-between text-xs p-2 rounded bg-zinc-50 dark:bg-zinc-950 border border-black/[0.02] dark:border-zinc-850"
                               >
                                 <span className="font-bold text-[#0A0A0F] dark:text-zinc-200">
-                                  <span className="text-[#FF6A00] font-black mr-1">{serveItem.qty}×</span>
+                                  <span className="text-[#FF6A00] font-black mr-1">
+                                    {serveItem.qty}×
+                                  </span>
                                   {serveItem.name}
                                 </span>
                                 <button
@@ -950,7 +1080,10 @@ export default function WaiterClient() {
                                   title="Mark item as served"
                                 >
                                   {isServing ? (
-                                    <Loader2 size={10} className="animate-spin" />
+                                    <Loader2
+                                      size={10}
+                                      className="animate-spin"
+                                    />
                                   ) : (
                                     <Check size={10} className="stroke-[3]" />
                                   )}
@@ -986,9 +1119,25 @@ export default function WaiterClient() {
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                   {tables.map((table) => {
-                    const session = table.currentSessionId
-                      ? activeSessions.find((s) => s.id === table.currentSessionId)
-                      : activeSessions.find((s) => s.tableId === table.id && s.status === "active");
+                    const targetTableId = table.mergedInto || table.id;
+                    const groupTables = tables.filter(
+                      (t) => (t.mergedInto || t.id) === targetTableId,
+                    );
+                    const groupActiveSess = activeSessions.filter((s) =>
+                      groupTables.some((gt) => gt.id === s.tableId),
+                    );
+                    if (
+                      table.currentSessionId &&
+                      !groupActiveSess.some(
+                        (s) => s.id === table.currentSessionId,
+                      )
+                    ) {
+                      const s = activeSessions.find(
+                        (s) => s.id === table.currentSessionId,
+                      );
+                      if (s) groupActiveSess.push(s);
+                    }
+                    const session = groupActiveSess[0] || null;
                     const isPending = pendingSessions.some(
                       (s) => s.tableId === table.id,
                     );
@@ -1011,16 +1160,20 @@ export default function WaiterClient() {
                         {/* Pulsing neon status dot at top-right */}
                         {(isPending || session) && (
                           <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                            <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                              isPending 
-                                ? "bg-amber-400 shadow-[0_0_8px_#f59e0b]" 
-                                : "bg-emerald-400 shadow-[0_0_8px_#10b981]"
-                            }`} />
-                            <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                              isPending 
-                                ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" 
-                                : "bg-emerald-500 shadow-[0_0_8px_#10b981]"
-                            }`} />
+                            <span
+                              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                                isPending
+                                  ? "bg-amber-400 shadow-[0_0_8px_#f59e0b]"
+                                  : "bg-emerald-400 shadow-[0_0_8px_#10b981]"
+                              }`}
+                            />
+                            <span
+                              className={`relative inline-flex rounded-full h-2 w-2 ${
+                                isPending
+                                  ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]"
+                                  : "bg-emerald-500 shadow-[0_0_8px_#10b981]"
+                              }`}
+                            />
                           </span>
                         )}
 
@@ -1047,7 +1200,9 @@ export default function WaiterClient() {
                             </span>
                           ) : session ? (
                             <span className="text-[8.5px] font-bold text-emerald-700 dark:text-emerald-450 max-w-[90px] truncate block mx-auto">
-                              {session.customerName || "Dining"}
+                              {groupActiveSess.length > 1
+                                ? `${groupActiveSess.length} Active Guests`
+                                : getGuestNames(session)}
                             </span>
                           ) : (
                             <span className="text-[8.5px] font-medium text-zinc-400 dark:text-zinc-500 block">
@@ -1062,8 +1217,6 @@ export default function WaiterClient() {
               )}
             </div>
           )}
-
-
         </div>
       </div>
 
@@ -1076,10 +1229,32 @@ export default function WaiterClient() {
           maxWidth="max-w-md"
         >
           <div className="space-y-4 pt-2 text-left">
+            {groupActiveSessions.length > 1 && (
+              <div className="flex border-b border-black/[0.06] dark:border-zinc-850 pb-2 overflow-x-auto gap-1">
+                {groupActiveSessions.map((sess) => {
+                  const isActive = sess.id === activeTableSession?.id;
+                  return (
+                    <button
+                      key={sess.id}
+                      type="button"
+                      onClick={() => setSelectedSessionId(sess.id)}
+                      className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        isActive
+                          ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-955"
+                          : "bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 text-zinc-550 dark:text-zinc-450 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      }`}
+                    >
+                      {getGuestNames(sess)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {activeTableSession ? (
               <div className="space-y-4">
                 {/* Guest details card */}
-                <div className="text-xs space-y-1 bg-zinc-50 dark:bg-zinc-950 border border-black/[0.03] dark:border-zinc-850 p-3 rounded-md">
+                <div className="text-xs space-y-1 bg-zinc-50 dark:bg-zinc-950 border border-black/[0.03] dark:border-zinc-855 p-3 rounded-md">
                   <p className="flex items-center gap-2 text-zinc-700 dark:text-zinc-300">
                     <User size={13} className="text-[#FF6A00]" />
                     <span className="font-extrabold">
@@ -1094,153 +1269,271 @@ export default function WaiterClient() {
                   )}
                 </div>
 
-                {/* Consolidated billing summary list */}
-                <div className="space-y-2">
-                  <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-505 uppercase tracking-widest border-b border-black/[0.04] dark:border-zinc-800 pb-1.5">
-                    Consolidated Bill Details
-                  </p>
-                  {billItemsArray.length === 0 ? (
-                    <p className="text-[11px] text-zinc-450 dark:text-zinc-500 italic text-center py-4">
-                      No active items ordered yet.
-                    </p>
-                  ) : (
-                    <div className="divide-y divide-black/[0.04] dark:divide-zinc-800 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
-                      {billItemsArray.map((item, idx) => {
-                        const servedForThisItem = servedInstancesByName[item.name] || [];
-                        const firstServedInstance = servedForThisItem[0];
-                        const isReverting = firstServedInstance && 
-                          revertingItemId?.orderId === firstServedInstance.orderId && 
-                          revertingItemId?.itemIndex === firstServedInstance.itemIndex;
+                {/* Dialog Tabs: Billing Summary vs Order History & Status */}
+                <div className="flex bg-zinc-100/80 dark:bg-zinc-900 p-0.5 rounded-lg border border-black/[0.04] dark:border-zinc-800 shadow-3xs w-full mb-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDialogTab("checkout")}
+                    className={`flex-1 py-1.5 px-3 rounded-md text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 leading-none ${
+                      dialogTab === "checkout"
+                        ? "bg-white text-zinc-900 dark:bg-zinc-800 dark:text-white shadow-3xs"
+                        : "text-zinc-500 dark:text-zinc-455 hover:text-zinc-850 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    <span>Billing Summary</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDialogTab("orders")}
+                    className={`flex-1 py-1.5 px-3 rounded-md text-[10.5px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 leading-none ${
+                      dialogTab === "orders"
+                        ? "bg-white text-zinc-900 dark:bg-zinc-800 dark:text-white shadow-3xs"
+                        : "text-zinc-550 dark:text-zinc-455 hover:text-zinc-855 dark:hover:text-zinc-200"
+                    }`}
+                  >
+                    <span>Order Tickets ({activeTableOrders.length})</span>
+                  </button>
+                </div>
+
+                {dialogTab === "checkout" ? (
+                  <div className="space-y-4">
+                    {/* Consolidated billing summary list */}
+                    <div className="space-y-2">
+                      <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-505 uppercase tracking-widest border-b border-black/[0.04] dark:border-zinc-800 pb-1.5">
+                        Consolidated Bill Details
+                      </p>
+                      {billItemsArray.length === 0 ? (
+                        <p className="text-[11px] text-zinc-450 dark:text-zinc-500 italic text-center py-4">
+                          No active items ordered yet.
+                        </p>
+                      ) : (
+                        <div className="divide-y divide-black/[0.04] dark:divide-zinc-800 space-y-2.5 max-h-[220px] overflow-y-auto pr-1">
+                          {billItemsArray.map((item, idx) => {
+                            const servedForThisItem =
+                              servedInstancesByName[item.name] || [];
+                            const servedQty = servedForThisItem.reduce(
+                              (sum, inst) => sum + parseInt(inst.qty || 1),
+                              0
+                            );
+                            const firstServedInstance = servedForThisItem[0];
+                            const isReverting =
+                              firstServedInstance &&
+                              revertingItemId?.orderId ===
+                                firstServedInstance.orderId &&
+                              revertingItemId?.itemIndex ===
+                                firstServedInstance.itemIndex;
+
+                            return (
+                              <div
+                                key={idx}
+                                className="flex justify-between items-start text-xs pt-2 first:pt-0"
+                              >
+                                <div className="min-w-0">
+                                  <p className="font-bold text-[#0A0A0F] dark:text-zinc-200 truncate">
+                                    {item.name}
+                                  </p>
+                                  <div className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                                    <span>
+                                      {item.qty} × ₹{item.price}
+                                    </span>
+                                    {servedQty > 0 && (
+                                      <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-955/20 px-1 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
+                                        {servedQty} served
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2.5 shrink-0">
+                                  <span className="font-bold text-zinc-800 dark:text-zinc-300">
+                                    ₹{item.price * item.qty}
+                                  </span>
+                                  {servedQty > 0 && (
+                                    <button
+                                      disabled={isReverting}
+                                      onClick={() =>
+                                        handleRevertServedItem(firstServedInstance)
+                                      }
+                                      className="h-6 px-1.5 rounded border border-rose-100 dark:border-rose-950 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-[10px] font-bold flex items-center justify-center cursor-pointer transition-all shadow-2xs"
+                                      title="Revert one served item to ready"
+                                    >
+                                      {isReverting ? (
+                                        <Loader2
+                                          size={10}
+                                          className="animate-spin"
+                                        />
+                                      ) : (
+                                        "Undo"
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Billing Summary Total */}
+                    {billGrandTotal > 0 && (
+                      <div className="pt-3.5 border-t border-black/[0.06] dark:border-zinc-850 flex items-center justify-between">
+                        <span className="text-xs font-bold text-zinc-500 dark:text-zinc-450">
+                          Bill Grand Total
+                        </span>
+                        <span className="text-base font-black text-[#FF6A00]">
+                          ₹{billGrandTotal}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Payment Tracking Metadata */}
+                    <div className="space-y-3 pt-3 border-t border-black/[0.06] dark:border-zinc-850">
+                      <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-505 uppercase tracking-widest">
+                        Payment Collection Details
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
+                            Collected By (Waiter)
+                          </label>
+                          <input
+                            type="text"
+                            value={waiterName}
+                            onChange={(e) => setWaiterName(e.target.value)}
+                            placeholder="Enter waiter name"
+                            className="w-full h-8 px-2.5 rounded border border-black/[0.08] dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#FF6A00]"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
+                            Payment Method
+                          </label>
+                          <div className="flex gap-1 h-8">
+                            {["Cash", "UPI", "Card"].map((method) => (
+                              <button
+                                key={method}
+                                type="button"
+                                onClick={() => setPaymentMethod(method)}
+                                className={`flex-1 rounded border text-[10px] font-black transition-all cursor-pointer ${
+                                  paymentMethod === method
+                                    ? "bg-[#0A0A0F] text-white border-transparent dark:bg-zinc-100 dark:text-zinc-955"
+                                    : "bg-white dark:bg-zinc-800 border-black/[0.08] dark:border-zinc-700 text-zinc-550 dark:text-zinc-455 hover:bg-zinc-50 dark:hover:bg-zinc-750"
+                                }`}
+                              >
+                                {method}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* checkout CTA actions */}
+                    <div className="pt-3 border-t border-black/[0.05] dark:border-zinc-855 space-y-2">
+                      <button
+                        onClick={() =>
+                          handlePrintSlip(activeTableSession, activeTableOrders)
+                        }
+                        disabled={billGrandTotal === 0}
+                        className="w-full h-10 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-[11px] font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50 text-zinc-650 dark:text-zinc-300"
+                      >
+                        <Printer size={12} />
+                        Print Receipt Summary
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleCheckoutSession(
+                            activeTableSession,
+                            activeTableOrders,
+                          )
+                        }
+                        disabled={checkoutLoading || billGrandTotal === 0}
+                        className="w-full h-11 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                      >
+                        {checkoutLoading ? (
+                          <Loader2 size={12} className="animate-spin" />
+                        ) : (
+                          <Coins size={12} />
+                        )}
+                        Collect Payment & Close Table
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                    {activeTableOrders.length === 0 ? (
+                      <p className="text-[11px] text-zinc-450 dark:text-zinc-500 italic text-center py-8">
+                        No order tickets placed yet.
+                      </p>
+                    ) : (
+                      [...activeTableOrders].reverse().map((order, reversedIdx) => {
+                        const ticketNum = activeTableOrders.length - reversedIdx;
+                        const statusColors = {
+                          placed: "bg-orange-50 text-orange-600 border-orange-100 dark:bg-orange-955/20 dark:text-orange-400 dark:border-orange-950/30",
+                          confirmed: "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-955/20 dark:text-blue-400 dark:border-blue-950/30",
+                          preparing: "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-955/20 dark:text-amber-400 dark:border-amber-950/30",
+                          ready: "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-955/20 dark:text-emerald-400 dark:border-emerald-950/30",
+                          served: "bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-955/20 dark:text-indigo-400 dark:border-indigo-950/30",
+                          cancelled: "bg-rose-50 text-rose-600 border-rose-100 dark:bg-rose-955/20 dark:text-rose-455 dark:border-rose-950/30",
+                        };
+                        const date = order.placedAt ? new Date(order.placedAt) : null;
+                        const timeStr = date ? date.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : "";
 
                         return (
-                          <div
-                            key={idx}
-                            className="flex justify-between items-start text-xs pt-2 first:pt-0"
-                          >
-                            <div className="min-w-0">
-                              <p className="font-bold text-[#0A0A0F] dark:text-zinc-200 truncate">
-                                {item.name}
-                              </p>
-                              <div className="text-[10px] text-zinc-450 dark:text-zinc-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
-                                <span>{item.qty} × ₹{item.price}</span>
-                                {servedForThisItem.length > 0 && (
-                                  <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-450 bg-emerald-50 dark:bg-emerald-955/20 px-1 py-0.5 rounded border border-emerald-100 dark:border-emerald-900/30">
-                                    {servedForThisItem.length} served
+                          <div key={order.id || reversedIdx} className="p-3 bg-zinc-50/50 dark:bg-zinc-950/40 border border-black/[0.04] dark:border-zinc-850 rounded-lg space-y-2">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10.5px] font-extrabold text-zinc-850 dark:text-zinc-200">
+                                  Ticket #{ticketNum}
+                                </span>
+                                {timeStr && (
+                                  <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-mono font-medium">
+                                    • {timeStr}
                                   </span>
                                 )}
                               </div>
-                            </div>
-                            <div className="flex items-center gap-2.5 shrink-0">
-                              <span className="font-bold text-zinc-800 dark:text-zinc-300">
-                                ₹{item.price * item.qty}
+                              <span className={`text-[8.5px] font-extrabold uppercase px-1.5 py-0.5 rounded border ${statusColors[order.status] || "bg-zinc-50 text-zinc-500 border-zinc-100"}`}>
+                                {order.status}
                               </span>
-                              {servedForThisItem.length > 0 && (
-                                <button
-                                  disabled={isReverting}
-                                  onClick={() => handleRevertServedItem(firstServedInstance)}
-                                  className="h-6 px-1.5 rounded border border-rose-100 dark:border-rose-950 bg-rose-50 dark:bg-rose-950/20 text-rose-600 dark:text-rose-455 hover:bg-rose-100 dark:hover:bg-rose-950/40 text-[10px] font-bold flex items-center justify-center cursor-pointer transition-all shadow-2xs"
-                                  title="Revert one served item to ready"
-                                >
-                                  {isReverting ? (
-                                    <Loader2 size={10} className="animate-spin" />
-                                  ) : (
-                                    "Undo"
+                            </div>
+
+                            {order.note && (
+                              <div className="text-[10px] text-amber-605 dark:text-amber-450 bg-amber-50/30 dark:bg-amber-950/10 border border-amber-100/40 dark:border-amber-900/10 px-2 py-1 rounded">
+                                <span className="font-bold">Note:</span> {order.note}
+                              </div>
+                            )}
+
+                            <div className="divide-y divide-black/[0.03] dark:divide-zinc-800/40 space-y-1.5 pt-1">
+                              {order.items?.map((item: any, iIdx: number) => (
+                                <div key={iIdx} className="flex justify-between items-center text-[11px] pt-1.5 first:pt-0">
+                                  <span className="text-[#0A0A0F] dark:text-zinc-300 font-medium">
+                                    <span className="font-extrabold text-[#FF6A00] mr-1">{item.qty}x</span> {item.name}
+                                  </span>
+                                  {item.status && (
+                                    <span className={`text-[8px] font-bold uppercase px-1 rounded-sm ${
+                                      item.status === "served"
+                                        ? "bg-indigo-50/65 text-indigo-650 border border-indigo-100/30 dark:bg-indigo-955/20 dark:text-indigo-400"
+                                        : item.status === "ready"
+                                          ? "bg-emerald-50/65 text-emerald-650 border border-emerald-100/30 dark:bg-emerald-955/20 dark:text-emerald-400"
+                                          : item.status === "preparing"
+                                            ? "bg-amber-50/65 text-amber-650 border border-amber-100/30 dark:bg-amber-955/20 dark:text-amber-400"
+                                            : item.status === "cancelled"
+                                              ? "bg-rose-50/65 text-rose-650 border border-rose-100/30 dark:bg-rose-955/20 dark:text-rose-400"
+                                              : "text-zinc-400 dark:text-zinc-500"
+                                    }`}>
+                                      {item.status}
+                                    </span>
                                   )}
-                                </button>
-                              )}
+                                </div>
+                              ))}
                             </div>
                           </div>
                         );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Billing Summary Total */}
-                {billGrandTotal > 0 && (
-                  <div className="pt-3.5 border-t border-black/[0.06] dark:border-zinc-850 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-500 dark:text-zinc-450">
-                      Bill Grand Total
-                    </span>
-                    <span className="text-base font-black text-[#FF6A00]">
-                      ₹{billGrandTotal}
-                    </span>
+                      })
+                    )}
                   </div>
                 )}
-
-                {/* Payment Tracking Metadata */}
-                <div className="space-y-3 pt-3 border-t border-black/[0.06] dark:border-zinc-850">
-                  <p className="text-[9px] font-black text-zinc-400 dark:text-zinc-505 uppercase tracking-widest">
-                    Payment Collection Details
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
-                        Collected By (Waiter)
-                      </label>
-                      <input
-                        type="text"
-                        value={waiterName}
-                        onChange={(e) => setWaiterName(e.target.value)}
-                        placeholder="Enter waiter name"
-                        className="w-full h-8 px-2.5 rounded border border-black/[0.08] dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-800 dark:text-zinc-200 focus:outline-none focus:ring-1 focus:ring-[#FF6A00]"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-zinc-405 dark:text-zinc-500 uppercase tracking-wider block">
-                        Payment Method
-                      </label>
-                      <div className="flex gap-1 h-8">
-                        {["Cash", "UPI", "Card"].map((method) => (
-                          <button
-                            key={method}
-                            type="button"
-                            onClick={() => setPaymentMethod(method)}
-                            className={`flex-1 rounded border text-[10px] font-black transition-all cursor-pointer ${
-                              paymentMethod === method
-                                ? "bg-[#0A0A0F] text-white border-transparent dark:bg-zinc-100 dark:text-zinc-955"
-                                : "bg-white dark:bg-zinc-800 border-black/[0.08] dark:border-zinc-700 text-zinc-550 dark:text-zinc-450 hover:bg-zinc-50 dark:hover:bg-zinc-750"
-                            }`}
-                          >
-                            {method}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* checkout CTA actions */}
-                <div className="pt-3 border-t border-black/[0.05] dark:border-zinc-855 space-y-2">
-                  <button
-                    onClick={() =>
-                      handlePrintSlip(activeTableSession, activeTableOrders)
-                    }
-                    disabled={billGrandTotal === 0}
-                    className="w-full h-10 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-700 text-[11px] font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-2xs disabled:opacity-50 text-zinc-650 dark:text-zinc-300"
-                  >
-                    <Printer size={12} />
-                    Print Receipt Summary
-                  </button>
-
-                  <button
-                    onClick={() =>
-                      handleCheckoutSession(
-                        activeTableSession,
-                        activeTableOrders,
-                      )
-                    }
-                    disabled={checkoutLoading || billGrandTotal === 0}
-                    className="w-full h-11 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-black flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {checkoutLoading ? (
-                      <Loader2 size={12} className="animate-spin" />
-                    ) : (
-                      <Coins size={12} />
-                    )}
-                    Collect Payment & Close Table
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="py-8 text-center text-zinc-400 space-y-2">
@@ -1267,7 +1560,7 @@ export default function WaiterClient() {
           maxWidth="max-w-sm"
         >
           <div className="space-y-4 pt-2">
-            <p className="text-xs text-zinc-500 font-semibold leading-relaxed">
+            <p className="text-xs text-zinc-550 font-semibold leading-relaxed">
               {confirmAction.message}
             </p>
             <div className="flex items-center gap-3 pt-2">
@@ -1291,6 +1584,21 @@ export default function WaiterClient() {
             </div>
           </div>
         </Dialog>
+      )}
+
+      {/* Floating Exit Fullscreen Button (only needed in standalone portal mode) */}
+      {isFullscreen && isPortal && (
+        <button
+          onClick={() => {
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch((err) => console.log(err));
+            }
+          }}
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          title="Exit Fullscreen"
+        >
+          <Minimize2 size={16} />
+        </button>
       )}
     </div>
   );

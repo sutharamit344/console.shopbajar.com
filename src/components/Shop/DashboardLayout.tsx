@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useLocation, useSearchParams, useNavigate, Outlet } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useSearchParams,
+  useNavigate,
+  Outlet,
+} from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth";
 import { useShopOwner } from "../../hooks/useShopOwner";
 import {
@@ -23,11 +29,12 @@ import {
   CircleAlert,
   Search,
   ChevronDown,
-  Store
+  Store,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import Button from "../UI/Button";
 import CommandPalette from "../UI/CommandPalette";
-
 
 const VIEW_LABELS: Record<string, string> = {
   overview: "Overview & Analytics",
@@ -42,6 +49,7 @@ const VIEW_LABELS: Record<string, string> = {
   tables: "Tables & QR",
   kitchen: "Kitchen View",
   waiter: "Waiter Console",
+  bookings: "Table Bookings",
 };
 
 export default function DashboardLayout() {
@@ -53,6 +61,18 @@ export default function DashboardLayout() {
 
   // Mobile drawer state
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Fullscreen state detection
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange);
+    };
+  }, []);
 
   // Command Palette state
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
@@ -68,7 +88,10 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      if (
+        userMenuRef.current &&
+        !userMenuRef.current.contains(event.target as Node)
+      ) {
         setIsUserMenuOpen(false);
       }
     };
@@ -108,7 +131,9 @@ export default function DashboardLayout() {
   useEffect(() => {
     const setFavicon = (href: string) => {
       // Remove all existing favicons
-      document.querySelectorAll("link[rel~='icon']").forEach((el) => el.remove());
+      document
+        .querySelectorAll("link[rel~='icon']")
+        .forEach((el) => el.remove());
       const link = document.createElement("link");
       link.rel = "icon";
       link.type = "image/png";
@@ -154,7 +179,8 @@ export default function DashboardLayout() {
             Workspace Error
           </h2>
           <p className="text-xs text-zinc-550 dark:text-zinc-400 font-medium leading-relaxed font-sans">
-            {error || "Unable to load business details. Please confirm you own this shop."}
+            {error ||
+              "Unable to load business details. Please confirm you own this shop."}
           </p>
           <div className="flex gap-2">
             <Button
@@ -173,11 +199,14 @@ export default function DashboardLayout() {
 
   const shopId = shop.id;
   const hasQrOrdering = !!shop?.paidFeatures?.qr_ordering?.enabled;
+  const hasTableBooking = !!shop?.paidFeatures?.table_booking?.enabled;
   const hasBilling =
     !!shop?.paidFeatures?.billing_system?.enabled ||
     !!shop?.paidFeatures?.invoice_tools?.enabled ||
     !!shop?.paidFeatures?.pos_slip_tools?.enabled;
-  const hasInquiries = !!shop?.paidFeatures?.whatsapp_checkout?.enabled || !!shop?.paidFeatures?.dashboard_checkout?.enabled;
+  const hasInquiries =
+    !!shop?.paidFeatures?.whatsapp_checkout?.enabled ||
+    !!shop?.paidFeatures?.dashboard_checkout?.enabled;
 
   // Navigation Items Definitions
   const operationsGroup = [
@@ -187,6 +216,16 @@ export default function DashboardLayout() {
       icon: Table2,
       path: `/tables?shopId=${shopId}`,
     },
+    ...(hasTableBooking
+      ? [
+          {
+            id: "bookings",
+            label: "Table Bookings",
+            icon: CalendarDays,
+            path: `/bookings?shopId=${shopId}`,
+          },
+        ]
+      : []),
     {
       id: "kitchen",
       label: "Kitchen View",
@@ -199,12 +238,16 @@ export default function DashboardLayout() {
       icon: Users,
       path: `/waiter?shopId=${shopId}`,
     },
-    ...(hasBilling ? [{
-      id: "billing",
-      label: "Billing & POS",
-      icon: Calculator,
-      path: `/manage?id=${shopId}&view=billing`,
-    }] : []),
+    ...(hasBilling
+      ? [
+          {
+            id: "billing",
+            label: "Billing & POS",
+            icon: Calculator,
+            path: `/manage?id=${shopId}&view=billing`,
+          },
+        ]
+      : []),
   ];
 
   const managementGroup = [
@@ -253,12 +296,16 @@ export default function DashboardLayout() {
   ];
 
   const growthGroup = [
-    ...(hasInquiries ? [{
-      id: "inquiries",
-      label: "Customer Inquiries",
-      icon: MessageSquare,
-      path: `/manage?id=${shopId}&view=inquiries`,
-    }] : []),
+    ...(hasInquiries
+      ? [
+          {
+            id: "inquiries",
+            label: "Customer Inquiries",
+            icon: MessageSquare,
+            path: `/manage?id=${shopId}&view=inquiries`,
+          },
+        ]
+      : []),
   ];
 
   // Helper to check if a navigation item is active
@@ -273,10 +320,10 @@ export default function DashboardLayout() {
 
   // Determine current active group
   const getActiveGroupId = () => {
-    if (operationsGroup.some(item => isItemActive(item))) {
+    if (operationsGroup.some((item) => isItemActive(item))) {
       return "operations";
     }
-    if (growthGroup.some(item => isItemActive(item))) {
+    if (growthGroup.some((item) => isItemActive(item))) {
       return "growth";
     }
     return "management"; // default fallback
@@ -302,10 +349,13 @@ export default function DashboardLayout() {
     activeGroupId === "operations"
       ? operationsGroup
       : activeGroupId === "growth"
-      ? growthGroup
-      : managementGroup;
+        ? growthGroup
+        : managementGroup;
 
-  const renderMobileNavGroup = (title: string, items: typeof operationsGroup) => {
+  const renderMobileNavGroup = (
+    title: string,
+    items: typeof operationsGroup,
+  ) => {
     if (items.length === 0) return null;
     return (
       <div className="space-y-1">
@@ -324,7 +374,10 @@ export default function DashboardLayout() {
                   : "text-zinc-650 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800/60"
               }`}
             >
-              <item.icon size={15} className={`shrink-0 ${active ? "" : "text-zinc-400 dark:text-zinc-500"}`} />
+              <item.icon
+                size={15}
+                className={`shrink-0 ${active ? "" : "text-zinc-400 dark:text-zinc-500"}`}
+              />
               <span className="truncate">{item.label}</span>
             </Link>
           );
@@ -335,240 +388,299 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-[#F7F7F5] dark:bg-zinc-950 flex flex-col text-zinc-900 dark:text-zinc-150">
-      
       {/* Sticky Topbar Header (Responsive) */}
-      <header className="sticky top-0 z-40 w-full flex flex-col border-b border-zinc-200/80 dark:border-zinc-850 bg-white dark:bg-zinc-900 shadow-xs">
-        
-        {/* Tier 1 - Brand, Modules, User Controls */}
-        <div className="h-14 px-4 md:px-6 flex items-center justify-between">
-          
-          {/* Left: Shop Identity & Brand */}
-          <div className="flex items-center gap-3">
-            <Link
-              to="/dashboard"
-              className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded transition-colors shrink-0"
-              title="Back to All Businesses"
-            >
-              <ArrowLeft size={16} />
-            </Link>
-            
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded bg-[#FF6A00] flex items-center justify-center text-white shrink-0 font-bold shadow-xs">
-                {shop.logo ? (
-                  <img src={shop.logo} alt="" className="w-full h-full object-cover rounded" />
-                ) : (
-                  shop.name.charAt(0).toUpperCase()
-                )}
-              </div>
-              <div className="leading-none hidden sm:block">
-                <h2 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[150px] tracking-tight mb-0.5">
-                  {shop.name}
-                </h2>
-                <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-mono">
-                  Console
-                </span>
+      {!isFullscreen && (
+        <header className="sticky top-0 z-40 w-full flex flex-col border-b border-zinc-200/80 dark:border-zinc-850 bg-white dark:bg-zinc-900 shadow-xs">
+          {/* Tier 1 - Brand, Modules, User Controls */}
+          <div className="h-14 px-4 md:px-6 flex items-center justify-between">
+            {/* Left: Shop Identity & Brand */}
+            <div className="flex items-center gap-3">
+              <Link
+                to="/dashboard"
+                className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded transition-colors shrink-0"
+                title="Back to All Businesses"
+              >
+                <ArrowLeft size={16} />
+              </Link>
+
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded bg-[#FF6A00] flex items-center justify-center text-white shrink-0 font-bold shadow-xs">
+                  {shop.logo ? (
+                    <img
+                      src={shop.logo}
+                      alt=""
+                      className="w-full h-full object-cover rounded"
+                    />
+                  ) : (
+                    shop.name.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="leading-none hidden sm:block">
+                  <h2 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[150px] tracking-tight mb-0.5">
+                    {shop.name}
+                  </h2>
+                  <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest font-mono">
+                    Console
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Middle: Desktop Module Switcher */}
-          <nav className="hidden md:flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-950 p-1 rounded-lg border border-zinc-200/40 dark:border-zinc-800/80">
-            {(hasQrOrdering || hasBilling) && (
+            {/* Middle: Desktop Module Switcher */}
+            <nav className="hidden md:flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-955 p-1 rounded-lg border border-zinc-200/40 dark:border-zinc-800/80">
+              {(hasQrOrdering || hasBilling) && (
+                <button
+                  onClick={() => handleGroupClick("operations")}
+                  className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                    activeGroupId === "operations"
+                      ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
+                      : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  Operations
+                </button>
+              )}
               <button
-                onClick={() => handleGroupClick("operations")}
+                onClick={() => handleGroupClick("management")}
                 className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  activeGroupId === "operations"
+                  activeGroupId === "management"
                     ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
                     : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
                 }`}
               >
-                Operations
+                Management
               </button>
-            )}
-            <button
-              onClick={() => handleGroupClick("management")}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                activeGroupId === "management"
-                  ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
-                  : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              Management
-            </button>
-            <button
-              onClick={() => handleGroupClick("growth")}
-              className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                activeGroupId === "growth"
-                  ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
-                  : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-              }`}
-            >
-              Growth & Billing
-            </button>
-          </nav>
-
-          {/* Right: User Menu & Mobile Trigger */}
-          <div className="flex items-center gap-2">
-            
-            {/* Desktop User Info & Sign Out */}
-            <div className="hidden md:flex items-center gap-2.5">
-              {/* Search Trigger (Command Palette) */}
               <button
-                onClick={() => setIsCommandPaletteOpen(true)}
-                className="flex items-center gap-2 px-2.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-350 transition-colors cursor-pointer"
-                title="Search or type a command (⌘K)"
+                onClick={() => handleGroupClick("growth")}
+                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
+                  activeGroupId === "growth"
+                    ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
+                    : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
+                }`}
               >
-                <Search size={12} className="shrink-0 text-zinc-400 dark:text-zinc-500" />
-                <span>Search...</span>
-                <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-250/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
-                  ⌘K
-                </kbd>
+                Growth & Billing
               </button>
+            </nav>
 
-              <div className="relative" ref={userMenuRef}>
+            {/* Right: User Menu & Mobile Trigger */}
+            <div className="flex items-center gap-2">
+              {/* Desktop User Info & Sign Out */}
+              <div className="hidden md:flex items-center gap-2.5">
+                {/* Search Trigger (Command Palette) */}
                 <button
-                  onClick={() => setIsUserMenuOpen((prev) => !prev)}
-                  className="flex items-center gap-2 px-2.5 py-1 bg-zinc-50 hover:bg-zinc-100/80 dark:bg-zinc-800/40 dark:hover:bg-zinc-800/80 rounded-md border border-zinc-200/50 dark:border-zinc-800/80 cursor-pointer select-none transition-all duration-200 focus:outline-hidden"
-                  aria-expanded={isUserMenuOpen}
-                  aria-haspopup="true"
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="flex items-center gap-2 px-2.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-350 transition-colors cursor-pointer"
+                  title="Search or type a command (⌘K)"
                 >
-                  <div className="w-5.5 h-5.5 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-300">
-                    {user?.photoURL ? (
-                      <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    ) : (
-                      <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-bold text-zinc-650 dark:text-zinc-350 truncate max-w-[100px]">
-                    {user?.displayName || "Merchant"}
-                  </span>
-                  <ChevronDown
+                  <Search
                     size={12}
-                    className={`text-zinc-400 dark:text-zinc-500 transition-transform duration-200 shrink-0 ${
-                      isUserMenuOpen ? "rotate-180" : ""
-                    }`}
+                    className="shrink-0 text-zinc-400 dark:text-zinc-500"
                   />
+                  <span>Search...</span>
+                  <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-white dark:bg-zinc-800 border border-zinc-250/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
+                    ⌘K
+                  </kbd>
                 </button>
 
-                {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-1.5 w-56 rounded-lg border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-zinc-900 shadow-md py-1.5 z-50 animate-in fade-in-50 slide-in-from-top-1 duration-150 origin-top-right">
-                    {/* User Header */}
-                    <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800/80">
-                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                        {user?.displayName || "Merchant"}
-                      </p>
-                      <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
-                        {user?.email}
-                      </p>
-                    </div>
-
-                    {/* Navigation Actions */}
-                    <div className="p-1">
-                      <Link
-                        to="/dashboard"
-                        onClick={() => setIsUserMenuOpen(false)}
-                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors"
-                      >
-                        <Store size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span>All Businesses</span>
-                      </Link>
-
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          setIsCommandPaletteOpen(true);
-                        }}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer text-left"
-                      >
-                        <Search size={13} className="text-zinc-400 dark:text-zinc-500 shrink-0" />
-                        <span className="flex-1">Command Palette</span>
-                        <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-205/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
-                          ⌘K
-                        </kbd>
-                      </button>
-                    </div>
-
-                    <div className="border-t border-zinc-100 dark:border-zinc-800/80 my-1" />
-
-                    {/* Logout Action */}
-                    <div className="p-1">
-                      <button
-                        onClick={() => {
-                          setIsUserMenuOpen(false);
-                          logout();
-                        }}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 transition-all cursor-pointer text-left"
-                      >
-                        <LogOut size={13} className="shrink-0" />
-                        <span>Sign Out</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Mobile Header Bar Details */}
-            <div className="flex items-center gap-2 md:hidden">
-              {/* Mobile Command Palette Trigger */}
-              <button
-                onClick={() => setIsCommandPaletteOpen(true)}
-                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
-                title="Search / Actions"
-              >
-                <Search size={18} />
-              </button>
-
-              {/* Hamburger Toggle */}
-              <button
-                onClick={() => setIsMobileOpen(true)}
-                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
-              >
-                <MenuIcon size={20} />
-              </button>
-              
-              <div className="min-w-0 flex flex-col leading-none justify-center">
-                <p className="text-[8px] font-bold text-zinc-450 dark:text-zinc-550 uppercase tracking-widest mb-0.5">
-                  {shop.name}
-                </p>
-                <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[120px]">
-                  {VIEW_LABELS[searchParams.get("view") || location.pathname.replace("/", "")] || "Dashboard"}
-                </p>
-              </div>
-            </div>
-            
-            <Link
-              to="/dashboard"
-              className="text-[9px] font-bold uppercase tracking-widest text-[#FF6A00] bg-[#FF6A00]/5 px-2.5 py-1.5 rounded-md border border-[#FF6A00]/15 md:hidden"
-            >
-              All Shops
-            </Link>
-          </div>
-        </div>
-
-        {/* Tier 2 - Sub-navigation Bar (Desktop Only) */}
-        <div className="hidden md:flex h-10 px-6 border-t border-zinc-100 dark:border-zinc-800/60 overflow-x-auto scrollbar-none">
-          <div className="flex items-center gap-1.5 h-full w-full">
-            {currentGroupItems.map((item) => {
-              const active = isItemActive(item);
-              return (
-                <Link
-                  key={item.id}
-                  to={item.path}
-                  className={`flex items-center gap-1.5 px-3 h-full border-b-2 transition-all text-xs font-semibold ${
-                    active
-                      ? "border-[#FF6A00] text-[#FF6A00]"
-                      : "border-transparent text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-150"
-                  }`}
+                {/* Fullscreen Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch((err) => {
+                        console.error("Failed to enter fullscreen:", err);
+                      });
+                    } else {
+                      document.exitFullscreen().catch((err) => {
+                        console.error("Failed to exit fullscreen:", err);
+                      });
+                    }
+                  }}
+                  className="flex items-center justify-center w-7.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-zinc-500 hover:text-[#FF6A00] dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 >
-                  <item.icon size={13} className="shrink-0" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
+                  {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                </button>
+
+                <div className="relative" ref={userMenuRef}>
+                  <button
+                    onClick={() => setIsUserMenuOpen((prev) => !prev)}
+                    className="flex items-center gap-2 px-2.5 py-1 bg-zinc-50 hover:bg-zinc-100/80 dark:bg-zinc-800/40 dark:hover:bg-zinc-800/80 rounded-md border border-zinc-200/50 dark:border-zinc-800/80 cursor-pointer select-none transition-all duration-200 focus:outline-hidden"
+                    aria-expanded={isUserMenuOpen}
+                    aria-haspopup="true"
+                  >
+                    <div className="w-5.5 h-5.5 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-300">
+                      {user?.photoURL ? (
+                        <img
+                          src={user.photoURL}
+                          alt="avatar"
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-bold text-zinc-650 dark:text-zinc-350 truncate max-w-[100px]">
+                      {user?.displayName || "Merchant"}
+                    </span>
+                    <ChevronDown
+                      size={12}
+                      className={`text-zinc-400 dark:text-zinc-500 transition-transform duration-200 shrink-0 ${
+                        isUserMenuOpen ? "rotate-180" : ""
+                      }`}
+                    />
+                  </button>
+
+                  {isUserMenuOpen && (
+                    <div className="absolute right-0 mt-1.5 w-56 rounded-lg border border-zinc-200/80 dark:border-zinc-800/90 bg-white dark:bg-zinc-900 shadow-md py-1.5 z-50 animate-in fade-in-50 slide-in-from-top-1 duration-150 origin-top-right">
+                      {/* User Header */}
+                      <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-800/80">
+                        <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                          {user?.displayName || "Merchant"}
+                        </p>
+                        <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                          {user?.email}
+                        </p>
+                      </div>
+
+                      {/* Navigation Actions */}
+                      <div className="p-1">
+                        <Link
+                          to="/dashboard"
+                          onClick={() => setIsUserMenuOpen(false)}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors"
+                        >
+                          <Store
+                            size={13}
+                            className="text-zinc-400 dark:text-zinc-500 shrink-0"
+                          />
+                          <span>All Businesses</span>
+                        </Link>
+
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            setIsCommandPaletteOpen(true);
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-semibold text-zinc-650 hover:text-zinc-900 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:text-zinc-200 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer text-left"
+                        >
+                          <Search
+                            size={13}
+                            className="text-zinc-400 dark:text-zinc-500 shrink-0"
+                          />
+                          <span className="flex-1">Command Palette</span>
+                          <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-205/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
+                            ⌘K
+                          </kbd>
+                        </button>
+                      </div>
+
+                      <div className="border-t border-zinc-100 dark:border-zinc-800/80 my-1" />
+
+                      {/* Logout Action */}
+                      <div className="p-1">
+                        <button
+                          onClick={() => {
+                            setIsUserMenuOpen(false);
+                            logout();
+                          }}
+                          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-955/20 transition-all cursor-pointer text-left"
+                        >
+                          <LogOut size={13} className="shrink-0" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Mobile Header Bar Details */}
+              <div className="flex items-center gap-2 md:hidden">
+                {/* Mobile Command Palette Trigger */}
+                <button
+                  onClick={() => setIsCommandPaletteOpen(true)}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                  title="Search / Actions"
+                >
+                  <Search size={18} />
+                </button>
+
+                {/* Mobile Fullscreen Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!document.fullscreenElement) {
+                      document.documentElement.requestFullscreen().catch((err) => {
+                        console.error("Failed to enter fullscreen:", err);
+                      });
+                    } else {
+                      document.exitFullscreen().catch((err) => {
+                        console.error("Failed to exit fullscreen:", err);
+                      });
+                    }
+                  }}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                >
+                  {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
+                </button>
+
+                {/* Hamburger Toggle */}
+                <button
+                  onClick={() => setIsMobileOpen(true)}
+                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                >
+                  <MenuIcon size={20} />
+                </button>
+
+                <div className="min-w-0 flex flex-col leading-none justify-center">
+                  <p className="text-[8px] font-bold text-zinc-450 dark:text-zinc-550 uppercase tracking-widest mb-0.5">
+                    {shop.name}
+                  </p>
+                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[120px]">
+                    {VIEW_LABELS[
+                      searchParams.get("view") ||
+                        location.pathname.replace("/", "")
+                    ] || "Dashboard"}
+                  </p>
+                </div>
+              </div>
+
+              <Link
+                to="/dashboard"
+                className="text-[9px] font-bold uppercase tracking-widest text-[#FF6A00] bg-[#FF6A00]/5 px-2.5 py-1.5 rounded-md border border-[#FF6A00]/15 md:hidden"
+              >
+                All Shops
+              </Link>
+            </div>
           </div>
-        </div>
-      </header>
+
+          {/* Tier 2 - Sub-navigation Bar (Desktop Only) */}
+          <div className="hidden md:flex h-10 px-6 border-t border-zinc-100 dark:border-zinc-800/60 overflow-x-auto scrollbar-none">
+            <div className="flex items-center gap-1.5 h-full w-full">
+              {currentGroupItems.map((item) => {
+                const active = isItemActive(item);
+                return (
+                  <Link
+                    key={item.id}
+                    to={item.path}
+                    className={`flex items-center gap-1.5 px-3 h-full border-b-2 transition-all text-xs font-semibold ${
+                      active
+                        ? "border-[#FF6A00] text-[#FF6A00]"
+                        : "border-transparent text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-150"
+                    }`}
+                  >
+                    <item.icon size={13} className="shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </header>
+      )}
 
       {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
@@ -590,7 +702,11 @@ export default function DashboardLayout() {
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded bg-[#FF6A00] flex items-center justify-center text-white shrink-0 font-bold shadow-xs">
                 {shop.logo ? (
-                  <img src={shop.logo} alt="" className="w-full h-full object-cover rounded" />
+                  <img
+                    src={shop.logo}
+                    alt=""
+                    className="w-full h-full object-cover rounded"
+                  />
                 ) : (
                   shop.name.charAt(0).toUpperCase()
                 )}
@@ -614,7 +730,8 @@ export default function DashboardLayout() {
 
           {/* Drawer Body (Scrollable lists) */}
           <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
-            {(hasQrOrdering || hasBilling) && renderMobileNavGroup("Real-Time Operations", operationsGroup)}
+            {(hasQrOrdering || hasBilling) &&
+              renderMobileNavGroup("Real-Time Operations", operationsGroup)}
             {renderMobileNavGroup("Management Suite", managementGroup)}
             {renderMobileNavGroup("Growth & Billing", growthGroup)}
           </div>
@@ -624,7 +741,12 @@ export default function DashboardLayout() {
             <div className="py-2 px-3 flex items-center gap-2 rounded-md bg-zinc-50 dark:bg-zinc-800/50">
               <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-350">
                 {user?.photoURL ? (
-                  <img src={user.photoURL} alt="avatar" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <img
+                    src={user.photoURL}
+                    alt="avatar"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
                   <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
                 )}
@@ -664,6 +786,20 @@ export default function DashboardLayout() {
         shop={shop}
       />
 
+      {/* Global Floating Exit Fullscreen Button */}
+      {isFullscreen && (
+        <button
+          onClick={() => {
+            if (document.exitFullscreen) {
+              document.exitFullscreen().catch((err) => console.log(err));
+            }
+          }}
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-950 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          title="Exit Fullscreen"
+        >
+          <Minimize2 size={16} />
+        </button>
+      )}
     </div>
   );
 }

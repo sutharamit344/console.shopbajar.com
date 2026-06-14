@@ -39,13 +39,37 @@ function serializeTimestamps(obj: any): any {
   return serialized;
 }
 
+function evaluatePaidFeatures(paidFeatures: any) {
+  if (!paidFeatures || typeof paidFeatures !== "object") return paidFeatures;
+  const now = new Date();
+  const evaluated = { ...paidFeatures };
+  for (const [key, feature] of Object.entries(evaluated)) {
+    if (feature && typeof feature === "object") {
+      const expiresAt = (feature as any).expiresAt;
+      if (expiresAt && new Date(expiresAt) < now) {
+        evaluated[key] = {
+          ...(feature as any),
+          enabled: false,
+          isExpired: true, // Flag it as expired so the UI can show Renew option
+        };
+      }
+    }
+  }
+  return evaluated;
+}
+
 function standardizeData(docSnap: any) {
   if (!docSnap.exists || !docSnap.exists()) return null;
+  const data = serializeTimestamps(docSnap.data());
+  if (data && data.paidFeatures) {
+    data.paidFeatures = evaluatePaidFeatures(data.paidFeatures);
+  }
   return {
     id: docSnap.id,
-    ...serializeTimestamps(docSnap.data()),
+    ...data,
   };
 }
+
 
 /**
  * Log merchant activity
@@ -110,13 +134,19 @@ export async function getShopsByOwner(ownerId: string): Promise<any[]> {
       where("ownerId", "==", ownerId),
     );
     const querySnapshot = await getDocs(q);
-    const results = querySnapshot.docs.map((docSnap) => ({
-      id: docSnap.id,
-      ...docSnap.data() as any,
-      createdAt: (docSnap.data() as any).createdAt?.toDate?.()
-        ? (docSnap.data() as any).createdAt.toDate().toISOString()
-        : null,
-    }));
+    const results = querySnapshot.docs.map((docSnap) => {
+      const data = docSnap.data() as any;
+      if (data.paidFeatures) {
+        data.paidFeatures = evaluatePaidFeatures(data.paidFeatures);
+      }
+      return {
+        id: docSnap.id,
+        ...data,
+        createdAt: data.createdAt?.toDate?.()
+          ? data.createdAt.toDate().toISOString()
+          : null,
+      };
+    });
 
     return results.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -126,6 +156,7 @@ export async function getShopsByOwner(ownerId: string): Promise<any[]> {
     return [];
   }
 }
+
 
 /**
  * Gets a single shop by ID.
@@ -666,6 +697,49 @@ export async function isSlugAvailable(slug: string, currentShopId?: string | nul
     return false;
   }
 }
+
+/**
+ * Saves a payment transaction to Firestore.
+ */
+export async function createPaymentRecord(paymentData: any) {
+  try {
+    const docRef = await addDoc(collection(db, "payments"), {
+      ...paymentData,
+      createdAt: serverTimestamp(),
+    });
+    // Log the activity
+    await logActivity(
+      "PAYMENT",
+      `Feature "${paymentData.featureKey}" activated via ${paymentData.paymentMethod} (Txn: ${paymentData.transactionId}).`,
+      paymentData.shopId,
+      "shop",
+      auth.currentUser?.email || "Merchant"
+    );
+    return { success: true, id: docRef.id };
+  } catch (error: any) {
+    console.error("Error creating payment record: ", error);
+    return { success: false, error: error.message || error };
+  }
+}
+
+/**
+ * Gets payment transactions for a shop.
+ */
+export async function getShopPayments(shopId: string): Promise<any[]> {
+  try {
+    const q = query(
+      collection(db, "payments"),
+      where("shopId", "==", shopId)
+    );
+    const snap = await getDocs(q);
+    const results = snap.docs.map(standardizeData).filter(Boolean);
+    return results.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  } catch (error) {
+    console.error("Error getting shop payments: ", error);
+    return [];
+  }
+}
+
 
 
 
