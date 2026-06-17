@@ -686,9 +686,13 @@ export async function isSlugAvailable(slug: string, currentShopId?: string | nul
       where("slug", "==", cleanSlug)
     );
     const snap = await getDocs(q);
-    if (snap.empty) return true;
+    const activeMatches = snap.docs.filter((doc) => {
+      const data = doc.data();
+      return data.status !== "deleted" && data.isDeleted !== true;
+    });
+    if (activeMatches.length === 0) return true;
     if (currentShopId) {
-      const otherMatches = snap.docs.filter((doc) => doc.id !== currentShopId);
+      const otherMatches = activeMatches.filter((doc) => doc.id !== currentShopId);
       return otherMatches.length === 0;
     }
     return false;
@@ -739,6 +743,190 @@ export async function getShopPayments(shopId: string): Promise<any[]> {
     return [];
   }
 }
+
+/**
+ * ─── STAFF MANAGEMENT ───────────────────────────────────────────────
+ */
+
+export async function getStaff(shopId: string): Promise<any[]> {
+  try {
+    const q = collection(db, "shops", shopId, "staff");
+    const snap = await getDocs(q);
+    const staff = snap.docs.map(standardizeData).filter(Boolean);
+    return staff.sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""));
+  } catch (error) {
+    console.error("Error getting staff: ", error);
+    return [];
+  }
+}
+
+export async function addStaff(shopId: string, staffData: any) {
+  try {
+    const docRef = await addDoc(collection(db, "shops", shopId, "staff"), {
+      ...staffData,
+      createdAt: new Date().toISOString(),
+    });
+    await logActivity(
+      "STAFF_CREATE",
+      `Added staff member "${staffData.name}".`,
+      shopId,
+      "shop"
+    );
+    return { success: true, id: docRef.id };
+  } catch (error: any) {
+    console.error("Error adding staff: ", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateStaff(shopId: string, staffId: string, staffData: any) {
+  try {
+    const docRef = doc(db, "shops", shopId, "staff", staffId);
+    await updateDoc(docRef, {
+      ...staffData,
+      updatedAt: new Date().toISOString(),
+    });
+    await logActivity(
+      "STAFF_UPDATE",
+      `Updated staff member "${staffData.name || staffId}".`,
+      shopId,
+      "shop"
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error updating staff: ", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteStaff(shopId: string, staffId: string) {
+  try {
+    const docRef = doc(db, "shops", shopId, "staff", staffId);
+    await deleteDoc(docRef);
+    await logActivity(
+      "STAFF_DELETE",
+      `Removed staff member ID "${staffId}".`,
+      shopId,
+      "shop"
+    );
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting staff: ", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * ─── CUSTOMER CRM MANAGEMENT ────────────────────────────────────────
+ */
+
+export async function getCustomers(shopId: string): Promise<any[]> {
+  try {
+    const q = query(collection(db, "shops", shopId, "customers"), orderBy("name", "asc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(standardizeData).filter(Boolean);
+  } catch (error) {
+    console.error("Error getting customers: ", error);
+    return [];
+  }
+}
+
+export async function getCustomerByPhone(shopId: string, phone: string): Promise<any | null> {
+  try {
+    const q = query(
+      collection(db, "shops", shopId, "customers"),
+      where("phone", "==", phone),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return standardizeData(snap.docs[0]);
+  } catch (error) {
+    console.error("Error finding customer by phone: ", error);
+    return null;
+  }
+}
+
+export async function addCustomer(shopId: string, customerData: any) {
+  try {
+    const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const customerId = `SB-CUST-${randomSuffix}`;
+    const docRef = await addDoc(collection(db, "shops", shopId, "customers"), {
+      ...customerData,
+      customerId,
+      stats: customerData.stats || { totalAppointments: 0, totalSpend: 0 },
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, id: docRef.id, customerId };
+  } catch (error: any) {
+    console.error("Error adding customer: ", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function updateCustomer(shopId: string, docId: string, customerData: any) {
+  try {
+    const docRef = doc(db, "shops", shopId, "customers", docId);
+    await updateDoc(docRef, {
+      ...customerData,
+      updatedAt: new Date().toISOString(),
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error updating customer: ", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function upsertCustomerFromBooking(
+  shopId: string,
+  bookingData: { name: string; phone: string; email?: string; bookingPrice?: number }
+): Promise<string> {
+  try {
+    const existing = await getCustomerByPhone(shopId, bookingData.phone);
+    const price = Number(bookingData.bookingPrice) || 0;
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    if (existing) {
+      const docRef = doc(db, "shops", shopId, "customers", existing.id);
+      const currentStats = existing.stats || { totalAppointments: 0, totalSpend: 0 };
+      const updatedStats = {
+        totalAppointments: (currentStats.totalAppointments || 0) + 1,
+        totalSpend: (currentStats.totalSpend || 0) + price,
+        lastBookingDate: todayStr,
+      };
+
+      await updateDoc(docRef, {
+        name: bookingData.name.trim(), // Keep name updated
+        email: (bookingData.email || existing.email || "").trim(),
+        stats: updatedStats,
+        updatedAt: new Date().toISOString(),
+      });
+      return existing.customerId;
+    } else {
+      const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+      const customerId = `SB-CUST-${randomSuffix}`;
+      
+      await addDoc(collection(db, "shops", shopId, "customers"), {
+        customerId,
+        name: bookingData.name.trim(),
+        phone: bookingData.phone.trim(),
+        email: (bookingData.email || "").trim(),
+        stats: {
+          totalAppointments: 1,
+          totalSpend: price,
+          lastBookingDate: todayStr,
+        },
+        createdAt: new Date().toISOString(),
+      });
+      return customerId;
+    }
+  } catch (error) {
+    console.error("Error upserting customer: ", error);
+    return "";
+  }
+}
+
 
 
 

@@ -276,8 +276,6 @@ export default function TablesClient() {
     setDeletingId(null);
   };
 
-
-
   const handleForceCloseSession = (session) => {
     const isPending = session.status === "pending";
     setConfirmAction({
@@ -298,7 +296,7 @@ export default function TablesClient() {
         if (!isPending) {
           try {
             sessionOrders = await getSessionOrders(shop.id, session.id);
-            
+
             const consolidatedItems: Record<string, any> = {};
             sessionOrders.forEach((order) => {
               if (order.status === "cancelled") return;
@@ -322,7 +320,7 @@ export default function TablesClient() {
             itemsArray = Object.values(consolidatedItems);
             subtotal = itemsArray.reduce(
               (sum, item) => sum + item.price * item.quantity,
-              0
+              0,
             );
 
             if (itemsArray.length > 0) {
@@ -360,22 +358,27 @@ export default function TablesClient() {
 
             // Print the POS Slip passing the fetched orders
             printPosSlip(shop, session, sessionOrders);
-
           } catch (err) {
-            console.error("Error creating bill or fetching orders for checkout: ", err);
+            console.error(
+              "Error creating bill or fetching orders for checkout: ",
+              err,
+            );
           }
         }
 
-        const checkoutData = !isPending && itemsArray.length > 0 ? {
-          collectedBy: "Dashboard Seating",
-          paymentMethod: "Cash",
-          billAmount: subtotal,
-          items: itemsArray.map(item => ({
-            name: item.name,
-            qty: item.quantity,
-            price: item.price
-          })),
-        } : undefined;
+        const checkoutData =
+          !isPending && itemsArray.length > 0
+            ? {
+                collectedBy: "Dashboard Seating",
+                paymentMethod: "Cash",
+                billAmount: subtotal,
+                items: itemsArray.map((item) => ({
+                  name: item.name,
+                  qty: item.quantity,
+                  price: item.price,
+                })),
+              }
+            : undefined;
 
         await closeSession(shop.id, session.id, session.tableId, checkoutData);
         for (const lt of linkedTables) {
@@ -419,8 +422,6 @@ export default function TablesClient() {
       },
     });
   };
-
-
 
   const handleMergeTables = async () => {
     if (!shop?.id || !pendingMergeTable || !mergeTargetId) return;
@@ -604,9 +605,7 @@ export default function TablesClient() {
                 <Button
                   variant="ghost"
                   className="text-xs h-9 font-bold"
-                  onClick={() =>
-                    (window.location.href = getCustomerAppUrl("/dashboard"))
-                  }
+                  onClick={() => navigate("/dashboard")}
                 >
                   Back to Dashboard
                 </Button>
@@ -615,9 +614,7 @@ export default function TablesClient() {
                   icon={ArrowRight}
                   className="text-xs h-9 shadow-sm font-bold"
                   onClick={() =>
-                    (window.location.href = getCustomerAppUrl(
-                      `/dashboard/manage?id=${shop.id}&view=features`,
-                    ))
+                    navigate(`/manage?shopId=${shop.id}&view=features`)
                   }
                 >
                   Upgrade & Activate Add-on
@@ -657,113 +654,116 @@ export default function TablesClient() {
         {/* Unified High-Density Header Row (Sticky and Glassmorphic on mobile) */}
         {!isFullscreen && (
           <div className="sticky top-0 z-40 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-black/[0.05] dark:border-zinc-800 p-2 flex items-center justify-between -mx-4 sm:mx-0 sm:rounded-md sm:border sm:mb-3 mb-2 shadow-2xs transition-all">
-          {/* Left: Back button + Title & Shop Stats */}
-          <div className="flex items-center gap-2.5 min-w-0">
-            {!isPortal && (
-              <a
-                href={getCustomerAppUrl("/dashboard")}
-                className="w-7 h-7 rounded-md border border-black/[0.08] dark:border-zinc-755 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F]/60 dark:hover:text-zinc-200 transition-colors shadow-sm shrink-0"
-              >
-                <ArrowLeft size={13} />
-              </a>
-            )}
-            <div className="flex items-center gap-2 flex-wrap min-w-0">
-              <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
-                {shop.name} · {tables.length} tables · {activeTableCount} active
-              </span>
-            </div>
-          </div>
-
-          {/* Right Section: View Mode & Kitchen Actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            {/* View Mode Toggle */}
-            <div className="flex items-center gap-0.5 bg-zinc-50 dark:bg-zinc-900 border border-black/[0.08] dark:border-zinc-800 p-0.5 h-8 rounded-md shrink-0">
-              <button
-                onClick={() => setViewMode("map")}
-                className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                  viewMode === "map"
-                    ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
-                    : "text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
-                }`}
-                title="Seating Floor Map"
-              >
-                <Table2 size={11} />
-                <span className="hidden xs:inline">Map</span>
-              </button>
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                  viewMode === "grid"
-                    ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
-                    : "text-[#0A0A0F]/50 dark:text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
-                }`}
-                title="Cards Grid"
-              >
-                <LayoutGrid size={11} />
-                <span className="hidden xs:inline">Grid</span>
-              </button>
+            {/* Left: Back button + Title & Shop Stats */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              {!isPortal && (
+                <a
+                  href={getCustomerAppUrl("/dashboard")}
+                  className="w-7 h-7 rounded-md border border-black/[0.08] dark:border-zinc-755 bg-white dark:bg-zinc-800 flex items-center justify-center text-[#0A0A0F]/40 dark:text-zinc-400 hover:text-[#0A0A0F]/60 dark:hover:text-zinc-200 transition-colors shadow-sm shrink-0"
+                >
+                  <ArrowLeft size={13} />
+                </a>
+              )}
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">
+                  {shop.name} · {tables.length} tables · {activeTableCount}{" "}
+                  active
+                </span>
+              </div>
             </div>
 
-            {/* Copy Staff Portal Link Button (Only for Owner) */}
-            {!isPortal && (
+            {/* Right Section: View Mode & Kitchen Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* View Mode Toggle */}
+              <div className="flex items-center gap-0.5 bg-zinc-50 dark:bg-zinc-900 border border-black/[0.08] dark:border-zinc-800 p-0.5 h-8 rounded-md shrink-0">
+                <button
+                  onClick={() => setViewMode("map")}
+                  className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    viewMode === "map"
+                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
+                      : "text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
+                  }`}
+                  title="Seating Floor Map"
+                >
+                  <Table2 size={11} />
+                  <span className="hidden xs:inline">Map</span>
+                </button>
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                    viewMode === "grid"
+                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
+                      : "text-[#0A0A0F]/50 dark:text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
+                  }`}
+                  title="Cards Grid"
+                >
+                  <LayoutGrid size={11} />
+                  <span className="hidden xs:inline">Grid</span>
+                </button>
+              </div>
+
+              {/* Copy Staff Portal Link Button (Only for Owner) */}
+              {!isPortal && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const staffUrl = `${window.location.origin}/portal/tables?shopId=${shop.id}`;
+                    navigator.clipboard.writeText(staffUrl);
+                    alert(
+                      "Copied Staff Tables Link to clipboard!\nShare this with your staff. PIN: " +
+                        (shop.staffPin || "1234"),
+                    );
+                  }}
+                  className="h-8 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                >
+                  <Copy size={12} className="text-zinc-400" />
+                  <span className="hidden md:inline">Share Staff URL</span>
+                </button>
+              )}
+
+              {/* Kitchen Link (Compact on mobile) */}
+              <Link
+                to={`${isPortal ? "/portal" : ""}/kitchen?shopId=${shop.id}`}
+                className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-155 hover:bg-black/[0.02] dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                title="Kitchen View"
+              >
+                <ChefHat size={12} className="text-[#FF6A00]" />
+                <span className="hidden sm:inline">Kitchen</span>
+              </Link>
+
+              {/* Waiter Link (Compact on mobile) */}
+              <Link
+                to={`${isPortal ? "/portal" : ""}/waiter?shopId=${shop.id}`}
+                className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-155 hover:bg-black/[0.02] dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                title="Waiter Console"
+              >
+                <Bell size={12} className="text-[#FF6A00]" />
+                <span className="hidden sm:inline">Waiter</span>
+              </Link>
+
               <button
                 type="button"
                 onClick={() => {
-                  const staffUrl = `${window.location.origin}/portal/tables?shopId=${shop.id}`;
-                  navigator.clipboard.writeText(staffUrl);
-                  alert(
-                    "Copied Staff Tables Link to clipboard!\nShare this with your staff. PIN: " +
-                      (shop.staffPin || "1234"),
-                  );
+                  if (!document.fullscreenElement) {
+                    document.documentElement
+                      .requestFullscreen()
+                      .catch((err) => {
+                        console.error("Failed to enter fullscreen:", err);
+                      });
+                  } else {
+                    document.exitFullscreen().catch((err) => {
+                      console.error("Failed to exit fullscreen:", err);
+                    });
+                  }
                 }}
-                className="h-8 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                className="h-8 w-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all shadow-sm shrink-0 cursor-pointer"
+                title="Enter Fullscreen"
               >
-                <Copy size={12} className="text-zinc-400" />
-                <span className="hidden md:inline">Share Staff URL</span>
+                <Maximize2 size={13} />
               </button>
-            )}
-
-            {/* Kitchen Link (Compact on mobile) */}
-            <Link
-              to={`${isPortal ? "/portal" : ""}/kitchen?shopId=${shop.id}`}
-              className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-155 hover:bg-black/[0.02] dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-              title="Kitchen View"
-            >
-              <ChefHat size={12} className="text-[#FF6A00]" />
-              <span className="hidden sm:inline">Kitchen</span>
-            </Link>
-
-            {/* Waiter Link (Compact on mobile) */}
-            <Link
-              to={`${isPortal ? "/portal" : ""}/waiter?shopId=${shop.id}`}
-              className="h-8 w-8 sm:w-auto sm:px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[11px] font-bold text-[#0A0A0F]/60 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-zinc-155 hover:bg-black/[0.02] dark:hover:bg-zinc-700 transition-all flex items-center justify-center gap-1.5 shadow-sm shrink-0"
-              title="Waiter Console"
-            >
-              <Bell size={12} className="text-[#FF6A00]" />
-              <span className="hidden sm:inline">Waiter</span>
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!document.fullscreenElement) {
-                  document.documentElement.requestFullscreen().catch((err) => {
-                    console.error("Failed to enter fullscreen:", err);
-                  });
-                } else {
-                  document.exitFullscreen().catch((err) => {
-                    console.error("Failed to exit fullscreen:", err);
-                  });
-                }
-              }}
-              className="h-8 w-8 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 flex items-center justify-center text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-all shadow-sm shrink-0 cursor-pointer"
-              title="Enter Fullscreen"
-            >
-              <Maximize2 size={13} />
-            </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
         {/* ── TWO-COLUMN GRID LAYOUT (Rearranged for mobile layout ordering) ── */}
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
@@ -1895,7 +1895,9 @@ export default function TablesClient() {
                       <div className="flex gap-2">
                         <button
                           type="button"
-                          onClick={() => setEditForm({ ...editForm, shape: "round" })}
+                          onClick={() =>
+                            setEditForm({ ...editForm, shape: "round" })
+                          }
                           className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
                             editForm.shape === "round"
                               ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
@@ -1906,7 +1908,9 @@ export default function TablesClient() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setEditForm({ ...editForm, shape: "rectangle" })}
+                          onClick={() =>
+                            setEditForm({ ...editForm, shape: "rectangle" })
+                          }
                           className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
                             editForm.shape === "rectangle"
                               ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-955 shadow-2xs"
@@ -1926,7 +1930,10 @@ export default function TablesClient() {
                         min="0"
                         value={editForm.bookingPrice}
                         onChange={(e) =>
-                          setEditForm({ ...editForm, bookingPrice: e.target.value })
+                          setEditForm({
+                            ...editForm,
+                            bookingPrice: e.target.value,
+                          })
                         }
                         className="w-full h-8.5 px-2.5 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-955 text-xs font-medium outline-none focus:border-[#FF6A00]/40 focus:bg-white dark:focus:bg-zinc-900 text-[#0A0A0F] dark:text-zinc-200 transition-all"
                       />
@@ -1952,416 +1959,419 @@ export default function TablesClient() {
                 </div>
               ) : (
                 <div className="space-y-4 pt-1 text-left animate-in fade-in duration-200">
-                {/* Top Section: Table Meta & Actions (Merge, QR Code) */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Table Merge Control */}
-                  {detailTable.mergedInto ? (
-                    <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 rounded-md p-3 flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-md bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
-                        <Table2 size={15} />
+                  {/* Top Section: Table Meta & Actions (Merge, QR Code) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Table Merge Control */}
+                    {detailTable.mergedInto ? (
+                      <div className="bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 rounded-md p-3 flex items-start gap-3">
+                        <div className="w-8 h-8 rounded-md bg-orange-100 dark:bg-orange-900/40 flex items-center justify-center text-orange-600 dark:text-orange-400 shrink-0">
+                          <Table2 size={15} />
+                        </div>
+                        <div className="flex-1 space-y-1.5">
+                          <div>
+                            <h4 className="text-xs font-bold text-orange-950 dark:text-orange-200">
+                              Merged Table
+                            </h4>
+                            <p className="text-[11px] text-orange-700 dark:text-orange-400 font-medium">
+                              This table is merged into{" "}
+                              <span className="font-bold">
+                                {targetTable?.name || "another table"}
+                              </span>
+                              .
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleUnmergeTable(detailTable)}
+                            className="px-2.5 py-1 rounded bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/50 dark:hover:bg-orange-900/80 text-orange-800 dark:text-orange-200 text-[10px] font-bold transition-all cursor-pointer"
+                          >
+                            Unmerge Table
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex-1 space-y-1.5">
+                    ) : groupTables.length > 1 ? (
+                      /* Merged Tables List Card */
+                      <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md space-y-2">
+                        <span className="text-[10px] font-bold text-[#0A0A0F]/30 dark:text-zinc-500 uppercase tracking-widest block">
+                          Merged Tables
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sortedGroupTables
+                            .filter((gt) => gt.id !== targetTableId)
+                            .map((gt) => (
+                              <div
+                                key={gt.id}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-900/30 text-orange-800 dark:text-orange-350 text-[10px] font-bold transition-all hover:bg-orange-100/50"
+                              >
+                                <span>{gt.name}</span>
+                                <button
+                                  onClick={() => handleUnmergeTable(gt)}
+                                  className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-orange-200/80 text-orange-600 hover:text-orange-950 transition-colors cursor-pointer"
+                                  title={`Unmerge ${gt.name}`}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width="10"
+                                    height="10"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="2.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  >
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                  </svg>
+                                </button>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md flex items-center justify-between gap-3">
                         <div>
-                          <h4 className="text-xs font-bold text-orange-950 dark:text-orange-200">
-                            Merged Table
+                          <h4 className="text-xs font-bold text-[#0A0A0F] dark:text-zinc-200">
+                            Merge Table
                           </h4>
-                          <p className="text-[11px] text-orange-700 dark:text-orange-400 font-medium">
-                            This table is merged into{" "}
-                            <span className="font-bold">
-                              {targetTable?.name || "another table"}
-                            </span>
-                            .
+                          <p className="text-[10px] text-[#0A0A0F]/40 dark:text-zinc-500 font-medium">
+                            Link this table to place shared orders.
                           </p>
                         </div>
                         <button
-                          onClick={() => handleUnmergeTable(detailTable)}
-                          className="px-2.5 py-1 rounded bg-orange-100 hover:bg-orange-200 dark:bg-orange-900/50 dark:hover:bg-orange-900/80 text-orange-800 dark:text-orange-200 text-[10px] font-bold transition-all cursor-pointer"
+                          onClick={() => {
+                            setPendingMergeTable(detailTable);
+                            setSelectedTableId(null);
+                          }}
+                          className="px-3 h-7 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-white text-[11px] font-bold transition-all cursor-pointer"
                         >
-                          Unmerge Table
-                        </button>
-                      </div>
-                    </div>
-                  ) : groupTables.length > 1 ? (
-                    /* Merged Tables List Card */
-                    <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md space-y-2">
-                      <span className="text-[10px] font-bold text-[#0A0A0F]/30 dark:text-zinc-500 uppercase tracking-widest block">
-                        Merged Tables
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {sortedGroupTables
-                          .filter((gt) => gt.id !== targetTableId)
-                          .map((gt) => (
-                            <div
-                              key={gt.id}
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-orange-50 dark:bg-orange-950/20 border border-orange-200/50 dark:border-orange-900/30 text-orange-800 dark:text-orange-350 text-[10px] font-bold transition-all hover:bg-orange-100/50"
-                            >
-                              <span>{gt.name}</span>
-                              <button
-                                onClick={() => handleUnmergeTable(gt)}
-                                className="w-4 h-4 rounded-full flex items-center justify-center hover:bg-orange-200/80 text-orange-600 hover:text-orange-950 transition-colors cursor-pointer"
-                                title={`Unmerge ${gt.name}`}
-                              >
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  width="10"
-                                  height="10"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2.5"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                >
-                                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-[#0A0A0F] dark:text-zinc-200">
                           Merge Table
-                        </h4>
-                        <p className="text-[10px] text-[#0A0A0F]/40 dark:text-zinc-500 font-medium">
-                          Link this table to place shared orders.
+                        </button>
+                      </div>
+                    )}
+
+                    {/* QR Panel Card */}
+                    <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md flex items-center gap-3">
+                      <div className="w-12 h-12 bg-white rounded-md border border-black/[0.06] overflow-hidden p-0.5 shrink-0 flex items-center justify-center">
+                        <img
+                          src={qrUrl}
+                          alt="QR Code"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <p className="text-[10px] text-[#0A0A0F]/50 dark:text-zinc-500 font-medium truncate">
+                          {tableUrl}
                         </p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setPendingMergeTable(detailTable);
-                          setSelectedTableId(null);
-                        }}
-                        className="px-3 h-7 rounded-md border border-black/[0.08] dark:border-zinc-700 bg-white dark:bg-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-300 hover:text-[#0A0A0F] dark:hover:text-white text-[11px] font-bold transition-all cursor-pointer"
-                      >
-                        Merge Table
-                      </button>
-                    </div>
-                  )}
-
-                  {/* QR Panel Card */}
-                  <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-3 rounded-md flex items-center gap-3">
-                    <div className="w-12 h-12 bg-white rounded-md border border-black/[0.06] overflow-hidden p-0.5 shrink-0 flex items-center justify-center">
-                      <img
-                        src={qrUrl}
-                        alt="QR Code"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    <div className="space-y-1.5 min-w-0 flex-1">
-                      <p className="text-[10px] text-[#0A0A0F]/50 dark:text-zinc-500 font-medium truncate">
-                        {tableUrl}
-                      </p>
-                      <div className="flex gap-1.5 flex-wrap">
-                        <button
-                          onClick={() => handleCopyUrl(detailTable.id)}
-                          className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          {copied ? (
-                            <Check size={8} className="text-emerald-500" />
-                          ) : (
-                            <Copy size={8} />
-                          )}
-                          <span>Copy Link</span>
-                        </button>
-                        <button
-                          onClick={() =>
-                            handlePrint(detailTable.id, detailTable.name)
-                          }
-                          className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          <Printer size={8} />
-                          <span>Print</span>
-                        </button>
-                        <a
-                          href={tableUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          <ExternalLink size={8} />
-                          <span>Guest View</span>
-                        </a>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bottom Section: Customer Session cards (2-Column Grid Layout, Collapsible, Single-Column inside) */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between border-b border-black/[0.04] dark:border-zinc-800 pb-1.5">
-                    <span className="text-[10px] font-black text-[#0A0A0F]/30 dark:text-zinc-500 uppercase tracking-widest">
-                      Active Customer Sessions ({groupSessions.length})
-                    </span>
-                  </div>
-
-                  {groupSessions.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {groupSessions.map((sess) => {
-                        const isSessPending = sess.status === "pending";
-                        const isSessActive = sess.status === "active";
-                        const isExpanded = expandedSessions[sess.id] !== false;
-
-                        // Filter orders for this session specifically
-                        const sessionOrders = activeOrders.filter(
-                          (order) => order.sessionId === sess.id,
-                        );
-
-                        // Calculate total for this session
-                        const sessionTotal = sessionOrders.reduce(
-                          (sum, order) => {
-                            if (order.status === "cancelled") return sum;
-                            return (
-                              sum +
-                              (order.items?.reduce(
-                                (oSum, item) =>
-                                  oSum +
-                                  parseFloat(item.price) *
-                                    parseInt(item.qty || 1),
-                                0,
-                              ) || 0)
-                            );
-                          },
-                          0,
-                        );
-
-                        return (
-                          <div
-                            key={sess.id}
-                            className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-zinc-800 rounded-md overflow-hidden shadow-2xs flex flex-col h-fit"
+                        <div className="flex gap-1.5 flex-wrap">
+                          <button
+                            onClick={() => handleCopyUrl(detailTable.id)}
+                            className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
                           >
-                            {/* Card Header: Clickable to Collapse, details on top */}
+                            {copied ? (
+                              <Check size={8} className="text-emerald-500" />
+                            ) : (
+                              <Copy size={8} />
+                            )}
+                            <span>Copy Link</span>
+                          </button>
+                          <button
+                            onClick={() =>
+                              handlePrint(detailTable.id, detailTable.name)
+                            }
+                            className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <Printer size={8} />
+                            <span>Print</span>
+                          </button>
+                          <a
+                            href={tableUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 rounded-md border border-black/[0.06] dark:border-zinc-750 hover:border-black/[0.12] bg-white dark:bg-zinc-800 text-[9px] font-bold text-[#0A0A0F]/60 dark:text-zinc-350 hover:text-[#0A0A0F] dark:hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <ExternalLink size={8} />
+                            <span>Guest View</span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Section: Customer Session cards (2-Column Grid Layout, Collapsible, Single-Column inside) */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between border-b border-black/[0.04] dark:border-zinc-800 pb-1.5">
+                      <span className="text-[10px] font-black text-[#0A0A0F]/30 dark:text-zinc-500 uppercase tracking-widest">
+                        Active Customer Sessions ({groupSessions.length})
+                      </span>
+                    </div>
+
+                    {groupSessions.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {groupSessions.map((sess) => {
+                          const isSessPending = sess.status === "pending";
+                          const isSessActive = sess.status === "active";
+                          const isExpanded =
+                            expandedSessions[sess.id] !== false;
+
+                          // Filter orders for this session specifically
+                          const sessionOrders = activeOrders.filter(
+                            (order) => order.sessionId === sess.id,
+                          );
+
+                          // Calculate total for this session
+                          const sessionTotal = sessionOrders.reduce(
+                            (sum, order) => {
+                              if (order.status === "cancelled") return sum;
+                              return (
+                                sum +
+                                (order.items?.reduce(
+                                  (oSum, item) =>
+                                    oSum +
+                                    parseFloat(item.price) *
+                                      parseInt(item.qty || 1),
+                                  0,
+                                ) || 0)
+                              );
+                            },
+                            0,
+                          );
+
+                          return (
                             <div
-                              onClick={() =>
-                                setExpandedSessions((prev) => ({
-                                  ...prev,
-                                  [sess.id]: !isExpanded,
-                                }))
-                              }
-                              className="bg-zinc-50/75 dark:bg-zinc-900/50 border-b border-black/[0.04] dark:border-zinc-800/80 px-3.5 py-2.5 flex flex-col gap-1.5 cursor-pointer select-none hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors"
+                              key={sess.id}
+                              className="bg-white dark:bg-zinc-900 border border-black/[0.06] dark:border-zinc-800 rounded-md overflow-hidden shadow-2xs flex flex-col h-fit"
                             >
-                              {/* Customer name + status + chevron */}
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <h4 className="text-[12.5px] font-bold text-[#0A0A0F] dark:text-zinc-100 leading-none truncate">
-                                    {getGuestNames(sess)}
-                                  </h4>
-                                  <span
-                                    className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider shrink-0 ${
-                                      isSessPending
-                                        ? "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-450 border border-amber-100 dark:border-amber-900/30"
-                                        : isSessActive
-                                          ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30"
-                                          : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-black/[0.04]"
-                                    }`}
-                                  >
-                                    {isSessPending ? "Pending" : "Active"}
-                                  </span>
-                                </div>
-                                <div className="text-zinc-400 dark:text-zinc-555 shrink-0">
-                                  {isExpanded ? (
-                                    <ChevronUp size={14} />
-                                  ) : (
-                                    <ChevronDown size={14} />
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Timestamps, contact info, total bill */}
-                              <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#0A0A0F]/50 dark:text-zinc-400">
-                                <div className="flex items-center gap-2 truncate">
-                                  <span className="flex items-center gap-0.5 shrink-0">
-                                    <Clock size={10} className="opacity-60" />
-                                    {new Date(
-                                      sess.createdAt,
-                                    ).toLocaleTimeString([], {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}
-                                  </span>
-                                  {getGuestPhones(sess) && (
-                                    <span className="truncate">
-                                      📞 {getGuestPhones(sess)}
-                                    </span>
-                                  )}
-                                  <span className="shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-455 px-1.5 py-0.5 rounded text-[9px] font-bold">
-                                    👤 {sess.guestCount || 1}{" "}
-                                    {(sess.guestCount || 1) === 1
-                                      ? "guest"
-                                      : "guests"}
-                                  </span>
-                                </div>
-                                <span className="text-[11.5px] font-black text-[#FF6A00] bg-orange-50 dark:bg-orange-950/10 border border-orange-100/50 dark:border-orange-900/20 px-2 py-0.5 rounded shrink-0">
-                                  ₹{sessionTotal}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Card Body: Show only when expanded */}
-                            {isExpanded && (
-                              <div className="p-3 border-t border-black/[0.03] dark:border-zinc-800/50 bg-zinc-50/20 dark:bg-zinc-900/10 flex-1 flex flex-col min-h-[120px]">
-                                <div className="text-[9.5px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest flex items-center justify-between shrink-0 mb-2">
-                                  <span>Orders Feed</span>
-                                  <span>
-                                    {sessionOrders.length} order
-                                    {sessionOrders.length !== 1 ? "s" : ""}{" "}
-                                    placed
-                                  </span>
-                                </div>
-
-                                <div className="space-y-2 overflow-y-auto max-h-[200px] pr-1 custom-scrollbar flex-1">
-                                  {sessionOrders.length === 0 ? (
-                                    <div className="h-full flex flex-col items-center justify-center text-center py-6 px-4 space-y-1.5 my-auto">
-                                      <div className="w-7 h-7 rounded-full bg-black/[0.03] dark:bg-zinc-800/80 flex items-center justify-center text-[#0A0A0F]/30 dark:text-zinc-500">
-                                        <ChefHat size={13} />
-                                      </div>
-                                      <p className="text-[10.5px] font-bold text-[#0A0A0F]/40 dark:text-zinc-555">
-                                        No orders placed yet
-                                      </p>
-                                    </div>
-                                  ) : (
-                                    sessionOrders.map((order) => (
-                                      <div
-                                        key={order.id}
-                                        className="bg-zinc-50/75 dark:bg-zinc-900/40 border border-black/[0.03] dark:border-zinc-800/80 rounded-md p-2.5 space-y-2 text-left"
-                                      >
-                                        <div className="flex items-center justify-between">
-                                          <span className="text-[9px] font-semibold text-[#0A0A0F]/45 dark:text-zinc-455">
-                                            {new Date(
-                                              order.placedAt,
-                                            ).toLocaleTimeString([], {
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                            })}
-                                          </span>
-
-                                          {/* Order Status Badge */}
-                                          <button
-                                            onClick={() =>
-                                              handleUpdateOrderStatus(
-                                                order.sessionId,
-                                                order.id,
-                                                order.status,
-                                              )
-                                            }
-                                            className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border cursor-pointer hover:scale-105 active:scale-95 transition-all ${
-                                              order.status === "placed"
-                                                ? "bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30"
-                                                : order.status === "preparing"
-                                                  ? "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30 animate-pulse"
-                                                  : order.status === "served"
-                                                    ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30"
-                                                    : "bg-zinc-50 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-100 dark:border-zinc-700"
-                                            }`}
-                                            title="Click to progress order status"
-                                          >
-                                            {order.status}
-                                          </button>
-                                        </div>
-
-                                        {/* Items List */}
-                                        <div className="space-y-1">
-                                          {order.items?.map((item, idx) => (
-                                            <div
-                                              key={idx}
-                                              className="flex justify-between items-start text-[11px] font-semibold text-[#0A0A0F] dark:text-zinc-200"
-                                            >
-                                              <span className="truncate">
-                                                {item.qty}x {item.name}
-                                              </span>
-                                              <span className="text-[#0A0A0F]/50 dark:text-zinc-500 shrink-0 ml-2">
-                                                ₹
-                                                {parseFloat(item.price) *
-                                                  parseInt(item.qty || 1)}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-
-                                        {/* Order Note */}
-                                        {order.note && (
-                                          <div className="text-[9.5px] text-amber-700 dark:text-amber-455 bg-amber-50/50 dark:bg-amber-950/10 px-2 py-1 rounded border border-amber-100/50 dark:border-amber-900/20 font-medium">
-                                            📝 {order.note}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))
-                                  )}
-                                </div>
-
-                                {/* Action controls inside the card body (below orders feed) */}
-                                <div className="mt-3 pt-2.5 border-t border-black/[0.04] dark:border-zinc-800/40 flex flex-col gap-2 shrink-0">
-                                  <div className="flex gap-2 w-full">
-                                    {isSessPending && (
-                                      <button
-                                        onClick={() =>
-                                          handleApproveSession(
-                                            sess.id,
-                                            sess.tableId,
-                                          )
-                                        }
-                                        className="flex-1 h-8 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center"
-                                      >
-                                        Approve
-                                      </button>
-                                    )}
-                                    <button
-                                      onClick={() => {
-                                        handleForceCloseSession(sess);
-                                        setSelectedTableId(null);
-                                      }}
-                                      className={`flex-1 h-8 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                              {/* Card Header: Clickable to Collapse, details on top */}
+                              <div
+                                onClick={() =>
+                                  setExpandedSessions((prev) => ({
+                                    ...prev,
+                                    [sess.id]: !isExpanded,
+                                  }))
+                                }
+                                className="bg-zinc-50/75 dark:bg-zinc-900/50 border-b border-black/[0.04] dark:border-zinc-800/80 px-3.5 py-2.5 flex flex-col gap-1.5 cursor-pointer select-none hover:bg-zinc-100/50 dark:hover:bg-zinc-800/30 transition-colors"
+                              >
+                                {/* Customer name + status + chevron */}
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <h4 className="text-[12.5px] font-bold text-[#0A0A0F] dark:text-zinc-100 leading-none truncate">
+                                      {getGuestNames(sess)}
+                                    </h4>
+                                    <span
+                                      className={`text-[8px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider shrink-0 ${
                                         isSessPending
-                                          ? "border border-black/[0.08] dark:border-zinc-700 hover:bg-black/[0.02] dark:hover:bg-zinc-800 text-[#0A0A0F]/60 dark:text-zinc-300"
-                                          : "bg-red-600 text-white hover:bg-red-700 shadow-2xs w-full"
+                                          ? "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-450 border border-amber-100 dark:border-amber-900/30"
+                                          : isSessActive
+                                            ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/30"
+                                            : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border border-black/[0.04]"
                                       }`}
                                     >
-                                      {isSessPending
-                                        ? "Reject Scan"
-                                        : `Check Out Customer (₹${sessionTotal})`}
-                                    </button>
+                                      {isSessPending ? "Pending" : "Active"}
+                                    </span>
+                                  </div>
+                                  <div className="text-zinc-400 dark:text-zinc-555 shrink-0">
+                                    {isExpanded ? (
+                                      <ChevronUp size={14} />
+                                    ) : (
+                                      <ChevronDown size={14} />
+                                    )}
                                   </div>
                                 </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-4 rounded-md text-center py-6">
-                      <p className="text-xs font-semibold text-[#0A0A0F]/45 dark:text-zinc-450">
-                        No active customer sessions checked in.
-                      </p>
-                    </div>
-                  )}
-                </div>
 
-                {/* Dialog footer actions */}
-                <div className="pt-2 border-t border-black/[0.05] dark:border-zinc-800 flex justify-end gap-2.5">
-                  {groupTables.length === 1 && (
+                                {/* Timestamps, contact info, total bill */}
+                                <div className="flex items-center justify-between gap-2 text-[10px] font-semibold text-[#0A0A0F]/50 dark:text-zinc-400">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="flex items-center gap-0.5 shrink-0">
+                                      <Clock size={10} className="opacity-60" />
+                                      {new Date(
+                                        sess.createdAt,
+                                      ).toLocaleTimeString([], {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
+                                    </span>
+                                    {getGuestPhones(sess) && (
+                                      <span className="truncate">
+                                        📞 {getGuestPhones(sess)}
+                                      </span>
+                                    )}
+                                    <span className="shrink-0 bg-zinc-100 dark:bg-zinc-800 text-zinc-650 dark:text-zinc-455 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                                      👤 {sess.guestCount || 1}{" "}
+                                      {(sess.guestCount || 1) === 1
+                                        ? "guest"
+                                        : "guests"}
+                                    </span>
+                                  </div>
+                                  <span className="text-[11.5px] font-black text-[#FF6A00] bg-orange-50 dark:bg-orange-950/10 border border-orange-100/50 dark:border-orange-900/20 px-2 py-0.5 rounded shrink-0">
+                                    ₹{sessionTotal}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Card Body: Show only when expanded */}
+                              {isExpanded && (
+                                <div className="p-3 border-t border-black/[0.03] dark:border-zinc-800/50 bg-zinc-50/20 dark:bg-zinc-900/10 flex-1 flex flex-col min-h-[120px]">
+                                  <div className="text-[9.5px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest flex items-center justify-between shrink-0 mb-2">
+                                    <span>Orders Feed</span>
+                                    <span>
+                                      {sessionOrders.length} order
+                                      {sessionOrders.length !== 1
+                                        ? "s"
+                                        : ""}{" "}
+                                      placed
+                                    </span>
+                                  </div>
+
+                                  <div className="space-y-2 overflow-y-auto max-h-[200px] pr-1 custom-scrollbar flex-1">
+                                    {sessionOrders.length === 0 ? (
+                                      <div className="h-full flex flex-col items-center justify-center text-center py-6 px-4 space-y-1.5 my-auto">
+                                        <div className="w-7 h-7 rounded-full bg-black/[0.03] dark:bg-zinc-800/80 flex items-center justify-center text-[#0A0A0F]/30 dark:text-zinc-500">
+                                          <ChefHat size={13} />
+                                        </div>
+                                        <p className="text-[10.5px] font-bold text-[#0A0A0F]/40 dark:text-zinc-555">
+                                          No orders placed yet
+                                        </p>
+                                      </div>
+                                    ) : (
+                                      sessionOrders.map((order) => (
+                                        <div
+                                          key={order.id}
+                                          className="bg-zinc-50/75 dark:bg-zinc-900/40 border border-black/[0.03] dark:border-zinc-800/80 rounded-md p-2.5 space-y-2 text-left"
+                                        >
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-[9px] font-semibold text-[#0A0A0F]/45 dark:text-zinc-455">
+                                              {new Date(
+                                                order.placedAt,
+                                              ).toLocaleTimeString([], {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                              })}
+                                            </span>
+
+                                            {/* Order Status Badge */}
+                                            <button
+                                              onClick={() =>
+                                                handleUpdateOrderStatus(
+                                                  order.sessionId,
+                                                  order.id,
+                                                  order.status,
+                                                )
+                                              }
+                                              className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider border cursor-pointer hover:scale-105 active:scale-95 transition-all ${
+                                                order.status === "placed"
+                                                  ? "bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 border-blue-100 dark:border-blue-900/30"
+                                                  : order.status === "preparing"
+                                                    ? "bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-400 border-amber-100 dark:border-amber-900/30 animate-pulse"
+                                                    : order.status === "served"
+                                                      ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-900/30"
+                                                      : "bg-zinc-50 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 border-zinc-100 dark:border-zinc-700"
+                                              }`}
+                                              title="Click to progress order status"
+                                            >
+                                              {order.status}
+                                            </button>
+                                          </div>
+
+                                          {/* Items List */}
+                                          <div className="space-y-1">
+                                            {order.items?.map((item, idx) => (
+                                              <div
+                                                key={idx}
+                                                className="flex justify-between items-start text-[11px] font-semibold text-[#0A0A0F] dark:text-zinc-200"
+                                              >
+                                                <span className="truncate">
+                                                  {item.qty}x {item.name}
+                                                </span>
+                                                <span className="text-[#0A0A0F]/50 dark:text-zinc-500 shrink-0 ml-2">
+                                                  ₹
+                                                  {parseFloat(item.price) *
+                                                    parseInt(item.qty || 1)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+
+                                          {/* Order Note */}
+                                          {order.note && (
+                                            <div className="text-[9.5px] text-amber-700 dark:text-amber-455 bg-amber-50/50 dark:bg-amber-950/10 px-2 py-1 rounded border border-amber-100/50 dark:border-amber-900/20 font-medium">
+                                              📝 {order.note}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+
+                                  {/* Action controls inside the card body (below orders feed) */}
+                                  <div className="mt-3 pt-2.5 border-t border-black/[0.04] dark:border-zinc-800/40 flex flex-col gap-2 shrink-0">
+                                    <div className="flex gap-2 w-full">
+                                      {isSessPending && (
+                                        <button
+                                          onClick={() =>
+                                            handleApproveSession(
+                                              sess.id,
+                                              sess.tableId,
+                                            )
+                                          }
+                                          className="flex-1 h-8 rounded-md bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center"
+                                        >
+                                          Approve
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => {
+                                          handleForceCloseSession(sess);
+                                          setSelectedTableId(null);
+                                        }}
+                                        className={`flex-1 h-8 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center ${
+                                          isSessPending
+                                            ? "border border-black/[0.08] dark:border-zinc-700 hover:bg-black/[0.02] dark:hover:bg-zinc-800 text-[#0A0A0F]/60 dark:text-zinc-300"
+                                            : "bg-red-600 text-white hover:bg-red-700 shadow-2xs w-full"
+                                        }`}
+                                      >
+                                        {isSessPending
+                                          ? "Reject Scan"
+                                          : `Check Out Customer (₹${sessionTotal})`}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 p-4 rounded-md text-center py-6">
+                        <p className="text-xs font-semibold text-[#0A0A0F]/45 dark:text-zinc-450">
+                          No active customer sessions checked in.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dialog footer actions */}
+                  <div className="pt-2 border-t border-black/[0.05] dark:border-zinc-800 flex justify-end gap-2.5">
+                    {groupTables.length === 1 && (
+                      <Button
+                        variant="outline"
+                        className="h-9 px-4 text-xs font-bold"
+                        onClick={() => setIsEditingTable(true)}
+                      >
+                        Edit Table
+                      </Button>
+                    )}
                     <Button
-                      variant="outline"
-                      className="h-9 px-4 text-xs font-bold"
-                      onClick={() => setIsEditingTable(true)}
+                      variant="dark"
+                      className="h-9 px-6 text-xs font-bold shadow-sm"
+                      onClick={() => setSelectedTableId(null)}
                     >
-                      Edit Table
+                      Close Details
                     </Button>
-                  )}
-                  <Button
-                    variant="dark"
-                    className="h-9 px-6 text-xs font-bold shadow-sm"
-                    onClick={() => setSelectedTableId(null)}
-                  >
-                    Close Details
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            )}
-          </Dialog>
+              )}
+            </Dialog>
           );
         })()}
       {/* Confirmation Dialog */}

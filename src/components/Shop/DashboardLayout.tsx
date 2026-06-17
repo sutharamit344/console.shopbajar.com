@@ -50,6 +50,7 @@ const VIEW_LABELS: Record<string, string> = {
   kitchen: "Kitchen View",
   waiter: "Waiter Console",
   bookings: "Table Bookings",
+  appointments: "Appointments",
 };
 
 export default function DashboardLayout() {
@@ -157,7 +158,7 @@ export default function DashboardLayout() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-955 flex items-center justify-center">
         <div className="text-center space-y-3">
           <Loader2 className="w-8 h-8 animate-spin text-[#FF6A00] mx-auto" />
           <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
@@ -172,7 +173,7 @@ export default function DashboardLayout() {
     return (
       <div className="min-h-screen bg-zinc-50 dark:bg-zinc-955 flex items-center justify-center p-4">
         <div className="max-w-md w-full text-center space-y-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-8 rounded-md shadow-sm">
-          <div className="w-12 h-12 bg-red-100 dark:bg-red-950/30 rounded-md flex items-center justify-center mx-auto text-red-550">
+          <div className="w-12 h-12 bg-red-100 dark:bg-red-955/30 rounded-md flex items-center justify-center mx-auto text-red-550">
             <CircleAlert size={24} />
           </div>
           <h2 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
@@ -200,6 +201,7 @@ export default function DashboardLayout() {
   const shopId = shop.id;
   const hasQrOrdering = !!shop?.paidFeatures?.qr_ordering?.enabled;
   const hasTableBooking = !!shop?.paidFeatures?.table_booking?.enabled;
+  const hasAppointments = !!shop?.paidFeatures?.appointment_booking?.enabled;
   const hasBilling =
     !!shop?.paidFeatures?.billing_system?.enabled ||
     !!shop?.paidFeatures?.invoice_tools?.enabled ||
@@ -210,12 +212,16 @@ export default function DashboardLayout() {
 
   // Navigation Items Definitions
   const operationsGroup = [
-    {
-      id: "tables",
-      label: "Tables & QR",
-      icon: Table2,
-      path: `/tables?shopId=${shopId}`,
-    },
+    ...(hasQrOrdering
+      ? [
+          {
+            id: "tables",
+            label: "Tables & QR",
+            icon: Table2,
+            path: `/tables?shopId=${shopId}`,
+          },
+        ]
+      : []),
     ...(hasTableBooking
       ? [
           {
@@ -226,18 +232,32 @@ export default function DashboardLayout() {
           },
         ]
       : []),
-    {
-      id: "kitchen",
-      label: "Kitchen View",
-      icon: ChefHat,
-      path: `/kitchen?shopId=${shopId}`,
-    },
-    {
-      id: "waiter",
-      label: "Waiter Console",
-      icon: Users,
-      path: `/waiter?shopId=${shopId}`,
-    },
+    ...(hasAppointments
+      ? [
+          {
+            id: "appointments",
+            label: "Appointments",
+            icon: CalendarDays,
+            path: `/appointments?shopId=${shopId}`,
+          },
+        ]
+      : []),
+    ...(hasQrOrdering
+      ? [
+          {
+            id: "kitchen",
+            label: "Kitchen View",
+            icon: ChefHat,
+            path: `/kitchen?shopId=${shopId}`,
+          },
+          {
+            id: "waiter",
+            label: "Waiter Console",
+            icon: Users,
+            path: `/waiter?shopId=${shopId}`,
+          },
+        ]
+      : []),
     ...(hasBilling
       ? [
           {
@@ -245,6 +265,16 @@ export default function DashboardLayout() {
             label: "Billing & POS",
             icon: Calculator,
             path: `/manage?id=${shopId}&view=billing`,
+          },
+        ]
+      : []),
+    ...(hasInquiries
+      ? [
+          {
+            id: "inquiries",
+            label: "Customer Inquiries",
+            icon: MessageSquare,
+            path: `/manage?id=${shopId}&view=inquiries`,
           },
         ]
       : []),
@@ -295,19 +325,6 @@ export default function DashboardLayout() {
     },
   ];
 
-  const growthGroup = [
-    ...(hasInquiries
-      ? [
-          {
-            id: "inquiries",
-            label: "Customer Inquiries",
-            icon: MessageSquare,
-            path: `/manage?id=${shopId}&view=inquiries`,
-          },
-        ]
-      : []),
-  ];
-
   // Helper to check if a navigation item is active
   const isItemActive = (item: { id: string; path: string }) => {
     if (location.pathname === "/manage") {
@@ -323,9 +340,6 @@ export default function DashboardLayout() {
     if (operationsGroup.some((item) => isItemActive(item))) {
       return "operations";
     }
-    if (growthGroup.some((item) => isItemActive(item))) {
-      return "growth";
-    }
     return "management"; // default fallback
   };
 
@@ -337,20 +351,13 @@ export default function DashboardLayout() {
       navigate(`/tables?shopId=${shopId}`);
     } else if (groupId === "management") {
       navigate(`/manage?id=${shopId}&view=overview`);
-    } else if (groupId === "growth") {
-      const firstGrowthItem = growthGroup[0];
-      if (firstGrowthItem) {
-        navigate(firstGrowthItem.path);
-      }
     }
   };
 
   const currentGroupItems =
     activeGroupId === "operations"
       ? operationsGroup
-      : activeGroupId === "growth"
-        ? growthGroup
-        : managementGroup;
+      : managementGroup;
 
   const renderMobileNavGroup = (
     title: string,
@@ -393,8 +400,8 @@ export default function DashboardLayout() {
         <header className="sticky top-0 z-40 w-full flex flex-col border-b border-zinc-200/80 dark:border-zinc-850 bg-white dark:bg-zinc-900 shadow-xs">
           {/* Tier 1 - Brand, Modules, User Controls */}
           <div className="h-14 px-4 md:px-6 flex items-center justify-between">
-            {/* Left: Shop Identity & Brand */}
-            <div className="flex items-center gap-3">
+            {/* Desktop Left: Shop Identity & Brand */}
+            <div className="hidden md:flex items-center gap-3">
               <Link
                 to="/dashboard"
                 className="p-1.5 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded transition-colors shrink-0"
@@ -415,7 +422,7 @@ export default function DashboardLayout() {
                     shop.name.charAt(0).toUpperCase()
                   )}
                 </div>
-                <div className="leading-none hidden sm:block">
+                <div className="leading-none">
                   <h2 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[150px] tracking-tight mb-0.5">
                     {shop.name}
                   </h2>
@@ -426,9 +433,44 @@ export default function DashboardLayout() {
               </div>
             </div>
 
+            {/* Mobile Left: Hamburger + Logo + Title */}
+            <div className="flex md:hidden items-center gap-2.5 min-w-0">
+              <button
+                onClick={() => setIsMobileOpen(true)}
+                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded text-zinc-550 dark:text-zinc-400 cursor-pointer shrink-0"
+                aria-label="Open navigation"
+              >
+                <MenuIcon size={20} />
+              </button>
+
+              <div className="w-7.5 h-7.5 rounded bg-[#FF6A00] flex items-center justify-center text-white shrink-0 font-bold shadow-xs">
+                {shop.logo ? (
+                  <img
+                    src={shop.logo}
+                    alt=""
+                    className="w-full h-full object-cover rounded"
+                  />
+                ) : (
+                  shop.name.charAt(0).toUpperCase()
+                )}
+              </div>
+
+              <div className="leading-none min-w-0">
+                <h2 className="text-[11px] font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[100px] tracking-tight mb-0.5">
+                  {shop.name}
+                </h2>
+                <span className="text-[9px] font-extrabold text-[#FF6A00] uppercase tracking-wider block truncate max-w-[100px]">
+                  {VIEW_LABELS[
+                    searchParams.get("view") ||
+                      location.pathname.replace("/", "")
+                  ] || "Dashboard"}
+                </span>
+              </div>
+            </div>
+
             {/* Middle: Desktop Module Switcher */}
             <nav className="hidden md:flex items-center gap-1.5 bg-zinc-50 dark:bg-zinc-955 p-1 rounded-lg border border-zinc-200/40 dark:border-zinc-800/80">
-              {(hasQrOrdering || hasBilling) && (
+              {(hasQrOrdering || hasBilling || hasInquiries) && (
                 <button
                   onClick={() => handleGroupClick("operations")}
                   className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
@@ -450,26 +492,16 @@ export default function DashboardLayout() {
               >
                 Management
               </button>
-              <button
-                onClick={() => handleGroupClick("growth")}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                  activeGroupId === "growth"
-                    ? "bg-white dark:bg-zinc-800 text-[#FF6A00] dark:text-white shadow-xs"
-                    : "text-zinc-550 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
-                }`}
-              >
-                Growth & Billing
-              </button>
             </nav>
 
-            {/* Right: User Menu & Mobile Trigger */}
+            {/* Right: User Menu & Mobile Controls */}
             <div className="flex items-center gap-2">
               {/* Desktop User Info & Sign Out */}
               <div className="hidden md:flex items-center gap-2.5">
                 {/* Search Trigger (Command Palette) */}
                 <button
                   onClick={() => setIsCommandPaletteOpen(true)}
-                  className="flex items-center gap-2 px-2.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-350 transition-colors cursor-pointer"
+                  className="flex items-center gap-2 px-2.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-[10px] font-bold text-zinc-400 hover:text-zinc-650 dark:text-zinc-550 dark:hover:text-zinc-350 transition-colors cursor-pointer"
                   title="Search or type a command (⌘K)"
                 >
                   <Search
@@ -496,7 +528,7 @@ export default function DashboardLayout() {
                       });
                     }
                   }}
-                  className="flex items-center justify-center w-7.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-zinc-500 hover:text-[#FF6A00] dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+                  className="flex items-center justify-center w-7.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-zinc-555 hover:text-[#FF6A00] dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
                   title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
                 >
                   {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
@@ -539,7 +571,7 @@ export default function DashboardLayout() {
                         <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">
                           {user?.displayName || "Merchant"}
                         </p>
-                        <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-500 truncate mt-0.5">
+                        <p className="text-[10px] font-medium text-zinc-400 dark:text-zinc-550 truncate mt-0.5">
                           {user?.email}
                         </p>
                       </div>
@@ -553,7 +585,7 @@ export default function DashboardLayout() {
                         >
                           <Store
                             size={13}
-                            className="text-zinc-400 dark:text-zinc-500 shrink-0"
+                            className="text-zinc-400 dark:text-zinc-555 shrink-0"
                           />
                           <span>All Businesses</span>
                         </Link>
@@ -567,10 +599,10 @@ export default function DashboardLayout() {
                         >
                           <Search
                             size={13}
-                            className="text-zinc-400 dark:text-zinc-500 shrink-0"
+                            className="text-zinc-400 dark:text-zinc-555 shrink-0"
                           />
                           <span className="flex-1">Command Palette</span>
-                          <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-205/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-550 select-none shadow-3xs">
+                          <kbd className="hidden lg:inline-flex items-center px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 border border-zinc-205/60 dark:border-zinc-700 font-mono text-[8px] leading-none text-zinc-400 dark:text-zinc-555 select-none shadow-3xs">
                             ⌘K
                           </kbd>
                         </button>
@@ -596,64 +628,27 @@ export default function DashboardLayout() {
                 </div>
               </div>
 
-              {/* Mobile Header Bar Details */}
-              <div className="flex items-center gap-2 md:hidden">
+              {/* Mobile Controls */}
+              <div className="flex md:hidden items-center gap-1.5">
                 {/* Mobile Command Palette Trigger */}
                 <button
                   onClick={() => setIsCommandPaletteOpen(true)}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
+                  className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-555 dark:text-zinc-450 cursor-pointer"
                   title="Search / Actions"
                 >
                   <Search size={18} />
                 </button>
 
-                {/* Mobile Fullscreen Toggle Button */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!document.fullscreenElement) {
-                      document.documentElement.requestFullscreen().catch((err) => {
-                        console.error("Failed to enter fullscreen:", err);
-                      });
-                    } else {
-                      document.exitFullscreen().catch((err) => {
-                        console.error("Failed to exit fullscreen:", err);
-                      });
-                    }
-                  }}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
-                  title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+                {/* Mobile Back to Dashboard / All Shops button */}
+                <Link
+                  to="/dashboard"
+                  className="flex items-center gap-1 px-2.5 py-1.5 bg-[#FF6A00]/5 text-[#FF6A00] hover:bg-[#FF6A00]/10 border border-[#FF6A00]/15 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all"
+                  title="Back to All Shops"
                 >
-                  {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-                </button>
-
-                {/* Hamburger Toggle */}
-                <button
-                  onClick={() => setIsMobileOpen(true)}
-                  className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 dark:text-zinc-400 cursor-pointer"
-                >
-                  <MenuIcon size={20} />
-                </button>
-
-                <div className="min-w-0 flex flex-col leading-none justify-center">
-                  <p className="text-[8px] font-bold text-zinc-450 dark:text-zinc-550 uppercase tracking-widest mb-0.5">
-                    {shop.name}
-                  </p>
-                  <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate max-w-[120px]">
-                    {VIEW_LABELS[
-                      searchParams.get("view") ||
-                        location.pathname.replace("/", "")
-                    ] || "Dashboard"}
-                  </p>
-                </div>
+                  <ArrowLeft size={12} />
+                  <span>Shops</span>
+                </Link>
               </div>
-
-              <Link
-                to="/dashboard"
-                className="text-[9px] font-bold uppercase tracking-widest text-[#FF6A00] bg-[#FF6A00]/5 px-2.5 py-1.5 rounded-md border border-[#FF6A00]/15 md:hidden"
-              >
-                All Shops
-              </Link>
             </div>
           </div>
 
@@ -730,10 +725,9 @@ export default function DashboardLayout() {
 
           {/* Drawer Body (Scrollable lists) */}
           <div className="flex-1 overflow-y-auto p-3 space-y-4 scrollbar-thin">
-            {(hasQrOrdering || hasBilling) &&
+            {(hasQrOrdering || hasBilling || hasInquiries) &&
               renderMobileNavGroup("Real-Time Operations", operationsGroup)}
             {renderMobileNavGroup("Management Suite", managementGroup)}
-            {renderMobileNavGroup("Growth & Billing", growthGroup)}
           </div>
 
           {/* Drawer Footer */}

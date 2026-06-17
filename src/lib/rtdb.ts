@@ -509,3 +509,81 @@ export async function seatBooking(
   });
 }
 
+// ─── APPOINTMENT BOOKING MANAGEMENT ─────────────────────────────────
+
+export interface AppointmentBooking {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  serviceId: string;
+  serviceName: string;
+  duration: number;
+  price: number;
+  staffId: string;
+  staffName: string;
+  date: string; // YYYY-MM-DD
+  time: string; // HH:mm
+  endTime: string; // HH:mm
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled' | 'no_show' | 'rejected';
+  paymentStatus: 'unpaid' | 'paid';
+  paymentTxnId?: string;
+  notes?: string;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+export async function createAppointmentBooking(shopId: string, data: Omit<AppointmentBooking, 'id' | 'status' | 'createdAt'>) {
+  const bookingRef = push(ref(rtdb, `appointment_bookings/${shopId}`));
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([_, v]) => v !== undefined)
+  );
+  await set(bookingRef, {
+    ...cleanData,
+    status: 'pending',
+    createdAt: Date.now(),
+  });
+  return bookingRef.key;
+}
+
+export function listenAppointmentBookings(shopId: string, callback: (bookings: AppointmentBooking[]) => void) {
+  const r = ref(rtdb, `appointment_bookings/${shopId}`);
+  const handler = (snap: any) => {
+    if (!snap.exists()) { callback([]); return; }
+    const data = snap.val();
+    callback(Object.entries(data).map(([id, val]: [string, any]) => ({ id, ...val } as AppointmentBooking)));
+  };
+  onValue(r, handler);
+  return () => off(r, 'value', handler);
+}
+
+export async function updateAppointmentBooking(shopId: string, bookingId: string, data: Partial<AppointmentBooking>) {
+  await update(ref(rtdb, `appointment_bookings/${shopId}/${bookingId}`), {
+    ...data,
+    updatedAt: Date.now(),
+  });
+}
+
+export async function confirmAppointmentBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `appointment_bookings/${shopId}/${bookingId}`), {
+    status: 'confirmed',
+    updatedAt: Date.now(),
+  });
+}
+
+export async function rejectAppointmentBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `appointment_bookings/${shopId}/${bookingId}`), {
+    status: 'rejected',
+    updatedAt: Date.now(),
+  });
+}
+
+export async function cancelAppointmentBooking(shopId: string, bookingId: string) {
+  await update(ref(rtdb, `appointment_bookings/${shopId}/${bookingId}`), {
+    status: 'cancelled',
+    updatedAt: Date.now(),
+  });
+}
+
+

@@ -434,9 +434,7 @@ export default function KitchenClient() {
                 <Button
                   variant="ghost"
                   className="text-xs h-9 font-bold"
-                  onClick={() =>
-                    (window.location.href = getCustomerAppUrl("/dashboard"))
-                  }
+                  onClick={() => navigate("/dashboard")}
                 >
                   Back to Dashboard
                 </Button>
@@ -444,11 +442,7 @@ export default function KitchenClient() {
                   variant="dark"
                   icon={ArrowRight}
                   className="text-xs h-9 shadow-sm font-bold"
-                  onClick={() =>
-                    (window.location.href = getCustomerAppUrl(
-                      `/dashboard/manage?id=${shop.id}&view=features`,
-                    ))
-                  }
+                  onClick={() => navigate(`/manage?shopId=${shop.id}&view=features`)}
                 >
                   Upgrade & Activate Add-on
                 </Button>

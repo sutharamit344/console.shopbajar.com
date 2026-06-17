@@ -552,14 +552,16 @@ const ShopForm: React.FC<ShopFormProps> = ({
       let logoUrl = formData.logo || "";
       if (logoFile) {
         setUploadStatus("Uploading logo...");
-        const path = `shops/${slug}/logo_${timestamp}.jpg`;
+        const ext = logoFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `shops/${slug}/logo_${timestamp}.${ext}`;
         logoUrl = await uploadImage(logoFile, path);
       }
 
       let coverUrl = formData.coverImage || "";
       if (coverFile) {
         setUploadStatus("Uploading cover image...");
-        const path = `shops/${slug}/cover_${timestamp}.jpg`;
+        const ext = coverFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `shops/${slug}/cover_${timestamp}.${ext}`;
         coverUrl = await uploadImage(coverFile, path);
       }
 

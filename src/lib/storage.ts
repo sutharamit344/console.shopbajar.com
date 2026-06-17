@@ -8,8 +8,11 @@ import { compressImage } from "./imageCompressor";
  */
 export async function uploadImage(file: File, path: string): Promise<string> {
   try {
-    // Apply client-side compression
-    const processedFile = await compressImage(file);
+    // Apply client-side compression only for images
+    let processedFile: File | Blob = file;
+    if (file && file.type && file.type.startsWith("image/")) {
+      processedFile = await compressImage(file);
+    }
     
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, processedFile);

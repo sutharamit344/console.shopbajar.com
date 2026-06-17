@@ -7,6 +7,7 @@ import {
   fetchShopPayments,
 } from "../../redux/thunks/dashboardThunks";
 import { AppDispatch, RootState } from "../../redux/store";
+import { useModal } from "../../hooks/useModal";
 import Card from "../UI/Card";
 import Button from "../UI/Button";
 import Dialog from "../UI/Dialog";
@@ -69,6 +70,11 @@ const FEATURE_FLOWS: Record<string, { title: string; desc: string }[]> = {
     { title: "Customer Books Online", desc: "Customer selects date, party size, available time slot, and fills contact details on your public shop profile." },
     { title: "Merchant Reviews", desc: "Booking appears in your Bookings console. Confirm or reject with one click. Customer is notified." },
     { title: "Seat Now → Live Session", desc: "When guest arrives, click 'Seat Now', assign a table — booking converts to an active session in your Tables view." }
+  ],
+  appointment_booking: [
+    { title: "Define Services & Catalog", desc: "Flag catalog menu items as services and specify their durations." },
+    { title: "Configure Shift Slots", desc: "Create staff profiles, assign services they perform, and set shift times/breaks." },
+    { title: "Check Real-Time Scheduler", desc: "View and manage all appointments, CRM customer profiles, and policies in one central dashboard." }
   ]
 };
 
@@ -96,6 +102,7 @@ const loadRazorpayScript = () => {
 
 const PaidFeaturesTab: React.FC<PaidFeaturesTabProps> = ({ shop }) => {
   const dispatch = useDispatch<AppDispatch>();
+  const { showAlert } = useModal();
   const masterFeatures = useSelector((state: RootState) => state.dashboard.masterFeatures || []);
   const loadingFeatures = useSelector((state: RootState) => state.dashboard.loadingFeatures);
   const activatingFeatureKey = useSelector((state: RootState) => state.dashboard.activatingFeatureKey);
@@ -215,7 +222,11 @@ const PaidFeaturesTab: React.FC<PaidFeaturesTabProps> = ({ shop }) => {
         const loaded = await loadRazorpayScript();
         if (!loaded) {
           setCheckoutStep("details");
-          alert("Failed to load Razorpay payment gateway script. Please verify internet connection.");
+          showAlert({
+            title: "Gateway Error",
+            message: "Failed to load Razorpay payment gateway script. Please verify internet connection.",
+            type: "error",
+          });
           return;
         }
 
@@ -261,7 +272,11 @@ const PaidFeaturesTab: React.FC<PaidFeaturesTabProps> = ({ shop }) => {
             } catch (err: any) {
               console.error("Signature verification error", err);
               setCheckoutStep("details");
-              alert(`Payment Verification Failed: ${err.message || "Invalid signature"}`);
+              showAlert({
+                title: "Verification Failed",
+                message: `Payment Verification Failed: ${err.message || "Invalid signature"}`,
+                type: "error",
+              });
             }
           },
           modal: {
@@ -288,7 +303,11 @@ const PaidFeaturesTab: React.FC<PaidFeaturesTabProps> = ({ shop }) => {
         // Handle payment failure event
         rzp.on("payment.failed", function (response: any) {
           console.error("Razorpay payment failed:", response.error);
-          alert(`Payment Failed: ${response.error.description || "Transaction declined"}`);
+          showAlert({
+            title: "Payment Failed",
+            message: `Payment Failed: ${response.error.description || "Transaction declined"}`,
+            type: "error",
+          });
           setCheckoutStep("details");
         });
 
@@ -296,7 +315,11 @@ const PaidFeaturesTab: React.FC<PaidFeaturesTabProps> = ({ shop }) => {
       } catch (err: any) {
         console.error("Razorpay setup failed", err);
         setCheckoutStep("details");
-        alert(err.message || "Failed to initiate payment gateway. Please try again.");
+        showAlert({
+          title: "Setup Error",
+          message: err.message || "Failed to initiate payment gateway. Please try again.",
+          type: "error",
+        });
       }
     } else {
       // Transition to sandbox payment method selection

@@ -11,6 +11,7 @@ import MerchantDashboard from "@/pages/MerchantDashboard";
 import CreateShop from "@/pages/CreateShop";
 import ManageShop from "@/pages/ManageShop";
 import BookingsClient from "@/pages/BookingsClient";
+import AppointmentsClient from "@/pages/AppointmentsClient";
 import DashboardLayout from "@/components/Shop/DashboardLayout";
 import ModalContainer from "@/components/ModalContainer";
 import { PortalWrapper } from "@/components/Shop/PortalWrapper";
@@ -31,6 +32,7 @@ function App() {
               <Route path="/kitchen" element={<KitchenClient />} />
               <Route path="/waiter" element={<WaiterClient />} />
               <Route path="/bookings" element={<BookingsClient />} />
+              <Route path="/appointments" element={<AppointmentsClient />} />
             </Route>
 
             {/* Staff portal routes - Standalone/No sidebar layout with PIN protection */}
@@ -38,6 +40,7 @@ function App() {
             <Route path="/portal/kitchen" element={<PortalWrapper><KitchenClient /></PortalWrapper>} />
             <Route path="/portal/waiter" element={<PortalWrapper><WaiterClient /></PortalWrapper>} />
             <Route path="/portal/bookings" element={<PortalWrapper><BookingsClient /></PortalWrapper>} />
+            <Route path="/portal/appointments" element={<PortalWrapper><AppointmentsClient /></PortalWrapper>} />
             <Route path="/portal/billing" element={<PortalWrapper><PortalBillingView /></PortalWrapper>} />
 
             {/* Business selector page */}

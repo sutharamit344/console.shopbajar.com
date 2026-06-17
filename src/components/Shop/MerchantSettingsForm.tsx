@@ -133,6 +133,8 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
       requireWaiterApproval: false,
     },
     staffPin: "1234",
+    razorpayKeyId: "",
+    razorpayKeySecret: "",
   });
 
   const [slugStatus, setSlugStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'taken' | 'invalid'
@@ -613,14 +615,16 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
       let logoUrl = formData.logo || "";
       if (logoFile) {
         setUploadStatus("Uploading logo...");
-        const path = `shops/${slug}/logo_${timestamp}.jpg`;
+        const ext = logoFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `shops/${slug}/logo_${timestamp}.${ext}`;
         logoUrl = await uploadImage(logoFile, path);
       }
 
       let coverUrl = formData.coverImage || "";
       if (coverFile) {
         setUploadStatus("Uploading cover image...");
-        const path = `shops/${slug}/cover_${timestamp}.jpg`;
+        const ext = coverFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const path = `shops/${slug}/cover_${timestamp}.${ext}`;
         coverUrl = await uploadImage(coverFile, path);
       }
 
@@ -1108,6 +1112,48 @@ const MerchantSettingsForm: React.FC<MerchantSettingsFormProps> = ({
             placeholder="1234"
             maxLength={4}
             helpText="Security PIN for sharing authentication-free staff URLs"
+          />
+        </div>
+      </div>
+
+      {/* ── SECTION 3.7: PAYMENT GATEWAY SETTINGS ── */}
+      <div
+        ref={(el) => {
+          if (sectionRefs?.current) sectionRefs.current["payments"] = el;
+        }}
+        className="bg-white dark:bg-zinc-900 rounded-md border border-zinc-200/80 dark:border-zinc-800 p-4 shadow-sm space-y-4 scroll-mt-20"
+      >
+        <div className="border-b border-zinc-100 dark:border-zinc-800 pb-3 flex items-center gap-2">
+          <div className="w-10 h-10 rounded-md bg-[#FF6A00]/10 flex items-center justify-center text-[#FF6A00]">
+            <LinkIcon size={20} />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
+              Payment Gateway Settings
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 font-medium">
+              Configure your direct Razorpay credentials. If left empty, customers will reserve slots without online payments (manual verification).
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <Input
+            label="Razorpay Key ID"
+            name="razorpayKeyId"
+            value={formData.razorpayKeyId || ""}
+            onChange={handleChange}
+            placeholder="rzp_live_... or rzp_test_..."
+            helpText="Your account's API Key ID."
+          />
+          <Input
+            label="Razorpay Key Secret"
+            name="razorpayKeySecret"
+            type="password"
+            value={formData.razorpayKeySecret || ""}
+            onChange={handleChange}
+            placeholder="••••••••••••••••"
+            helpText="Your account's API Key Secret."
           />
         </div>
       </div>

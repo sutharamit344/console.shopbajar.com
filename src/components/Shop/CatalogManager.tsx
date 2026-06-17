@@ -25,6 +25,37 @@ import Button from "../UI/Button";
 import Dialog from "../UI/Dialog";
 import { getCustomerAppUrl } from "../../lib/config";
 
+const isVideoUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  if (url.startsWith("data:")) {
+    return url.startsWith("data:video/");
+  }
+  const pathPart = url.split("?")[0].toLowerCase();
+  return (
+    pathPart.endsWith(".mp4") ||
+    pathPart.endsWith(".webm") ||
+    pathPart.endsWith(".ogg") ||
+    pathPart.endsWith(".mov") ||
+    pathPart.endsWith(".m4v") ||
+    pathPart.endsWith(".quicktime")
+  );
+};
+
+const countCatalogVideos = (menu: any[]): number => {
+  if (!menu) return 0;
+  let count = 0;
+  for (const cat of menu) {
+    if (cat.items) {
+      for (const item of cat.items) {
+        if (item.image && isVideoUrl(item.image)) {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+};
+
 interface CatalogImageProps {
   src?: string;
   alt: string;
@@ -38,12 +69,24 @@ const CatalogImage: React.FC<CatalogImageProps> = ({ src, alt, featured, isNew }
   return (
     <div className="absolute inset-0 bg-zinc-50 dark:bg-zinc-800 overflow-hidden flex items-center justify-center">
       {src && !hasError ? (
-        <img
-          src={src.includes(" ") ? src.replace(/\s/g, "%20") : src}
-          alt={alt}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-          onError={() => setHasError(true)}
-        />
+        isVideoUrl(src) ? (
+          <video
+            src={src.includes(" ") ? src.replace(/\s/g, "%20") : src}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            controls={false}
+            muted
+            loop
+            autoPlay
+            playsInline
+          />
+        ) : (
+          <img
+            src={src.includes(" ") ? src.replace(/\s/g, "%20") : src}
+            alt={alt}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            onError={() => setHasError(true)}
+          />
+        )
       ) : (
         <div className="w-full h-full flex items-center justify-center text-zinc-300 bg-zinc-100 absolute inset-0 dark:bg-zinc-800 dark:text-zinc-700">
           <ShoppingBag size={18} />
@@ -97,6 +140,11 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
   const [itemStock, setItemStock] = useState("");
   const [trackStock, setTrackStock] = useState(false);
   const [itemDiet, setItemDiet] = useState("");
+  const [itemIsService, setItemIsService] = useState(false);
+  const [itemServiceDuration, setItemServiceDuration] = useState("30");
+  const [itemHighlights, setItemHighlights] = useState<string[]>([]);
+  const [newHighlight, setNewHighlight] = useState("");
+  const [itemHighlightsLabel, setItemHighlightsLabel] = useState("");
 
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
@@ -228,6 +276,11 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
         isNew: itemIsNew,
         stock: trackStock ? (itemStock ? parseInt(itemStock, 10) : 0) : null,
         diet: itemDiet || null,
+        serviceDetails: itemIsService
+          ? { isService: true, duration: parseInt(itemServiceDuration, 10) || 30 }
+          : null,
+        highlights: itemHighlights,
+        highlightsLabel: itemHighlightsLabel.trim() || "Highlights",
       },
     ];
     newMenu[activeCategoryIdx] = updatedCategory;
@@ -251,6 +304,11 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
       isNew: itemIsNew,
       stock: trackStock ? (itemStock ? parseInt(itemStock, 10) : 0) : null,
       diet: itemDiet || null,
+      serviceDetails: itemIsService
+        ? { isService: true, duration: parseInt(itemServiceDuration, 10) || 30 }
+        : null,
+      highlights: itemHighlights,
+      highlightsLabel: itemHighlightsLabel.trim() || "Highlights",
     };
     updatedCategory.items = updatedItems;
     newMenu[activeCategoryIdx] = updatedCategory;
@@ -269,6 +327,11 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
     setItemStock("");
     setTrackStock(false);
     setItemDiet("");
+    setItemIsService(false);
+    setItemServiceDuration("30");
+    setItemHighlights([]);
+    setNewHighlight("");
+    setItemHighlightsLabel("");
   };
 
   const handleDeleteItem = () => {
@@ -644,7 +707,27 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                         return (
                           <div
                             key={iIdx}
-                            className="group bg-white border border-zinc-200/80 hover:border-zinc-300 hover:shadow-sm transition-all duration-200 rounded-md overflow-hidden flex flex-col dark:bg-zinc-950 dark:border-zinc-850 dark:hover:border-zinc-700"
+                            onClick={() => {
+                              setActiveCategoryIdx(idx);
+                              setActiveItemIdx(iIdx);
+                              setItemName(item.name);
+                              setItemPrice(item.price ? item.price.toString() : "");
+                              setItemDescription(item.description || "");
+                              setItemImage(item.image || "");
+                              setItemFeatured(!!item.featured);
+                              setItemIsNew(item.isNew !== false);
+                              setItemDiet(item.diet || "");
+                              const hasStock = item.stock !== undefined && item.stock !== null && item.stock !== "";
+                              setTrackStock(hasStock);
+                              setItemStock(hasStock ? item.stock.toString() : "");
+                              setItemIsService(!!item.serviceDetails?.isService);
+                              setItemServiceDuration(item.serviceDetails?.duration?.toString() || "30");
+                              setItemHighlights(item.highlights || []);
+                              setNewHighlight("");
+                              setItemHighlightsLabel(item.highlightsLabel || "Highlights");
+                              setShowEditItemModal(true);
+                            }}
+                            className="group bg-white border border-zinc-200/80 hover:border-[#FF6A00]/40 hover:shadow-sm transition-all duration-200 rounded-md overflow-hidden flex flex-col dark:bg-zinc-950 dark:border-zinc-850 dark:hover:border-[#FF6A00]/40 cursor-pointer"
                           >
                             <div className="relative w-full aspect-square bg-zinc-50 dark:bg-zinc-900 overflow-hidden">
                               <CatalogImage
@@ -685,39 +768,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                                   </span>
                                 )}
                               </div>
-                              {/* Hover actions panel */}
-                              <div className="flex gap-1.5 mt-1 border-t border-zinc-50 dark:border-zinc-900 pt-1.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => {
-                                    setActiveCategoryIdx(idx);
-                                    setActiveItemIdx(iIdx);
-                                    setItemName(item.name);
-                                    setItemPrice(item.price ? item.price.toString() : "");
-                                    setItemDescription(item.description || "");
-                                    setItemImage(item.image || "");
-                                    setItemFeatured(!!item.featured);
-                                    setItemIsNew(item.isNew !== false);
-                                    setItemDiet(item.diet || "");
-                                    const hasStock = item.stock !== undefined && item.stock !== null && item.stock !== "";
-                                    setTrackStock(hasStock);
-                                    setItemStock(hasStock ? item.stock.toString() : "");
-                                    setShowEditItemModal(true);
-                                  }}
-                                  className="flex-1 h-6 bg-zinc-50 hover:bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:hover:bg-zinc-700 dark:text-zinc-300 text-[9px] font-bold rounded flex items-center justify-center gap-1 transition-all border border-zinc-200/80 dark:border-zinc-700 cursor-pointer"
-                                >
-                                  <Settings2 size={10} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setActiveCategoryIdx(idx);
-                                    setActiveItemIdx(iIdx);
-                                    setShowDeleteModal(true);
-                                  }}
-                                  className="h-6 w-6 bg-red-500/10 hover:bg-red-500/20 rounded text-red-500 transition-all flex items-center justify-center border border-red-500/20 shrink-0 cursor-pointer"
-                                >
-                                  <X size={10} />
-                                </button>
-                              </div>
                             </div>
                           </div>
                         );
@@ -731,7 +781,27 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                         return (
                           <div
                             key={iIdx}
-                            className="group flex items-center gap-3 p-2 bg-white border border-zinc-200/80 hover:border-zinc-300 hover:shadow-sm dark:bg-zinc-950 dark:border-zinc-850 dark:hover:border-zinc-700 rounded-md transition-all"
+                            onClick={() => {
+                              setActiveCategoryIdx(idx);
+                              setActiveItemIdx(iIdx);
+                              setItemName(item.name);
+                              setItemPrice(item.price ? item.price.toString() : "");
+                              setItemDescription(item.description || "");
+                              setItemImage(item.image || "");
+                              setItemFeatured(!!item.featured);
+                              setItemIsNew(item.isNew !== false);
+                              setItemDiet(item.diet || "");
+                              const hasStock = item.stock !== undefined && item.stock !== null && item.stock !== "";
+                              setTrackStock(hasStock);
+                              setItemStock(hasStock ? item.stock.toString() : "");
+                              setItemIsService(!!item.serviceDetails?.isService);
+                              setItemServiceDuration(item.serviceDetails?.duration?.toString() || "30");
+                              setItemHighlights(item.highlights || []);
+                              setNewHighlight("");
+                              setItemHighlightsLabel(item.highlightsLabel || "Highlights");
+                              setShowEditItemModal(true);
+                            }}
+                            className="group flex items-center gap-3 p-2 bg-white border border-zinc-200/80 hover:border-[#FF6A00]/40 hover:shadow-sm dark:bg-zinc-950 dark:border-zinc-850 dark:hover:border-[#FF6A00]/40 rounded-md transition-all cursor-pointer"
                           >
                             <div className="relative self-stretch w-14 shrink-0 overflow-hidden bg-zinc-100 dark:bg-zinc-900 rounded-md">
                               <CatalogImage
@@ -765,45 +835,11 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                                   {item.price !== "" && item.price != null ? `₹${item.price}` : "On Request"}
                                 </span>
                                 {item.stock !== undefined && item.stock !== null && item.stock !== "" && (
-                                  <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded ${parseInt(item.stock, 10) <= 0 ? 'bg-red-50 text-red-650 dark:bg-red-950/20' : 'bg-zinc-50 text-zinc-500 dark:bg-zinc-800'}`}>
+                                  <span className={`text-[8.5px] font-bold px-1.5 py-0.5 rounded ${parseInt(item.stock, 10) <= 0 ? 'bg-red-55 text-red-650 dark:bg-red-950/20' : 'bg-zinc-50 text-zinc-500 dark:bg-zinc-800'}`}>
                                     {parseInt(item.stock, 10) <= 0 ? 'Out of stock' : `${item.stock} in stock`}
                                   </span>
                                 )}
                               </div>
-                            </div>
-                            <div className="flex gap-1 shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              <button
-                                onClick={() => {
-                                  setActiveCategoryIdx(idx);
-                                  setActiveItemIdx(iIdx);
-                                  setItemName(item.name);
-                                  setItemPrice(item.price ? item.price.toString() : "");
-                                  setItemDescription(item.description || "");
-                                  setItemImage(item.image || "");
-                                  setItemFeatured(!!item.featured);
-                                  setItemIsNew(item.isNew !== false);
-                                  setItemDiet(item.diet || "");
-                                  const hasStock = item.stock !== undefined && item.stock !== null && item.stock !== "";
-                                  setTrackStock(hasStock);
-                                  setItemStock(hasStock ? item.stock.toString() : "");
-                                  setShowEditItemModal(true);
-                                }}
-                                className="h-6 w-6 bg-zinc-50 border border-zinc-200/80 hover:bg-zinc-100 dark:bg-zinc-800 dark:border-zinc-700 dark:hover:bg-zinc-700 rounded-md text-zinc-600 dark:text-zinc-300 transition-all flex items-center justify-center cursor-pointer"
-                                title="Edit"
-                              >
-                                <Settings2 size={11} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setActiveCategoryIdx(idx);
-                                  setActiveItemIdx(iIdx);
-                                  setShowDeleteModal(true);
-                                }}
-                                className="h-6 w-6 bg-red-500/10 border border-red-500/25 rounded-md text-red-500 hover:bg-red-500/20 transition-all flex items-center justify-center cursor-pointer"
-                                title="Delete"
-                              >
-                                <X size={11} />
-                              </button>
                             </div>
                           </div>
                         );
@@ -1061,6 +1097,20 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                 compact
                 label="Photo"
                 folder="menu"
+                beforeUpload={async (file) => {
+                  if (file.type.startsWith("video/")) {
+                    const videoCount = countCatalogVideos(shop?.menu);
+                    if (videoCount >= 5) {
+                      onShowAlert({
+                        title: "Video Limit Reached",
+                        message: "Maximum 5 videos allowed per shop catalog.",
+                        type: "error"
+                      });
+                      return false;
+                    }
+                  }
+                  return true;
+                }}
               />
             </div>
             <div className="flex-1 w-full space-y-2">
@@ -1090,6 +1140,82 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               </div>
             </div>
           </div>
+          <Textarea
+            label="Short Description"
+            placeholder="Details about catalog items..."
+            value={itemDescription}
+            onChange={(e) => setItemDescription(e.target.value)}
+            rows={2}
+          />
+          {/* Highlights List Builder */}
+          <div className="space-y-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                Highlights Section Title
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Highlights, Specifications, Ingredients"
+                value={itemHighlightsLabel}
+                onChange={(e) => setItemHighlightsLabel(e.target.value)}
+                className="w-full h-8 px-2.5 bg-zinc-50 border border-zinc-200/80 rounded-md text-xs focus:bg-white focus:border-[#FF6A00]/40 outline-none transition-all dark:bg-zinc-850 dark:border-zinc-700 dark:text-zinc-100 mb-1.5"
+              />
+            </div>
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+              Add Highlight Point
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. 100% Organic, 1 Year Warranty..."
+                value={newHighlight}
+                onChange={(e) => setNewHighlight(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (newHighlight.trim()) {
+                      setItemHighlights([...itemHighlights, newHighlight.trim()]);
+                      setNewHighlight("");
+                    }
+                  }
+                }}
+                className="flex-1 h-8 px-2.5 bg-zinc-50 border border-zinc-200/80 rounded-md text-xs focus:bg-white focus:border-[#FF6A00]/40 outline-none transition-all dark:bg-zinc-850 dark:border-zinc-700 dark:text-zinc-100"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newHighlight.trim()) {
+                    setItemHighlights([...itemHighlights, newHighlight.trim()]);
+                    setNewHighlight("");
+                  }
+                }}
+                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md hover:bg-zinc-850 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
+              >
+                Add
+              </button>
+            </div>
+            {itemHighlights.length > 0 && (
+              <div className="space-y-1.5 pt-1 max-h-36 overflow-y-auto pr-1">
+                {itemHighlights.map((hl, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-2 p-1.5 px-2.5 bg-zinc-50 border border-zinc-200/60 rounded-md dark:bg-zinc-800/40 dark:border-zinc-750 shadow-2xs"
+                  >
+                    <span className="text-[11px] font-medium text-zinc-750 dark:text-zinc-300 break-all">
+                      • {hl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setItemHighlights(itemHighlights.filter((_, i) => i !== idx))}
+                      className="text-zinc-400 hover:text-red-500 transition-colors p-0.5 shrink-0"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <Select
             label="Dietary Preference (Veg / Non-Veg)"
             value={itemDiet}
@@ -1099,13 +1225,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               { value: "veg", label: "Vegetarian (Veg)" },
               { value: "nonveg", label: "Non-Vegetarian (Non-Veg)" },
             ]}
-          />
-          <Textarea
-            label="Short Description"
-            placeholder="Details about catalog items..."
-            value={itemDescription}
-            onChange={(e) => setItemDescription(e.target.value)}
-            rows={2}
           />
           <div className="pt-1 grid grid-cols-3 gap-2">
             <label className="flex items-center gap-2 p-2 bg-zinc-50 border border-zinc-200/80 rounded-md cursor-pointer hover:bg-zinc-100 transition-all dark:bg-zinc-800/50 dark:border-zinc-700 dark:hover:bg-zinc-800 shadow-sm">
@@ -1159,6 +1278,36 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                 </span>
               </div>
             </label>
+          </div>
+
+          {/* Appointment Service Toggle */}
+          <div className="border border-[#FF6A00]/20 bg-[#FF6A00]/5 rounded-md p-3 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={itemIsService}
+                onChange={(e) => setItemIsService(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-300 text-[#FF6A00] focus:ring-[#FF6A00]"
+              />
+              <div>
+                <span className="text-[10px] font-bold text-[#FF6A00] block tracking-tight">Bookable Appointment Service</span>
+                <span className="text-[9px] text-zinc-500 dark:text-zinc-400 font-medium">Enable slot booking for this item in Appointment System</span>
+              </div>
+            </label>
+            {itemIsService && (
+              <div className="flex items-center gap-2 pt-1">
+                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Duration (mins):</label>
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={itemServiceDuration}
+                  onChange={(e) => setItemServiceDuration(e.target.value)}
+                  className="w-20 h-7 px-2 border border-zinc-200 rounded text-xs font-bold outline-none focus:border-[#FF6A00]/40 bg-white dark:bg-zinc-900 dark:border-zinc-700"
+                />
+                <span className="text-[10px] text-zinc-400 font-medium">minutes per session</span>
+              </div>
+            )}
           </div>
           <div className="flex justify-end pt-2">
             <Button onClick={handleAddItem} disabled={!itemName.trim()}>
@@ -1185,6 +1334,24 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                 compact
                 label="Photo"
                 folder="menu"
+                beforeUpload={async (file) => {
+                  if (file.type.startsWith("video/")) {
+                    const originalImage = activeCategoryIdx !== null && activeItemIdx !== null
+                      ? shop?.menu?.[activeCategoryIdx]?.items?.[activeItemIdx]?.image
+                      : null;
+                    const originalIsVideo = originalImage && isVideoUrl(originalImage);
+                    const videoCount = countCatalogVideos(shop?.menu);
+                    if (videoCount >= 5 && !originalIsVideo) {
+                      onShowAlert({
+                        title: "Video Limit Reached",
+                        message: "Maximum 5 videos allowed per shop catalog.",
+                        type: "error"
+                      });
+                      return false;
+                    }
+                  }
+                  return true;
+                }}
               />
             </div>
             <div className="flex-1 w-full space-y-2">
@@ -1214,6 +1381,82 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               </div>
             </div>
           </div>
+          <Textarea
+            label="Short Description"
+            placeholder="Details about catalog items..."
+            value={itemDescription}
+            onChange={(e) => setItemDescription(e.target.value)}
+            rows={2}
+          />
+          {/* Highlights List Builder */}
+          <div className="space-y-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+                Highlights Section Title
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Highlights, Specifications, Ingredients"
+                value={itemHighlightsLabel}
+                onChange={(e) => setItemHighlightsLabel(e.target.value)}
+                className="w-full h-8 px-2.5 bg-zinc-50 border border-zinc-200/80 rounded-md text-xs focus:bg-white focus:border-[#FF6A00]/40 outline-none transition-all dark:bg-zinc-850 dark:border-zinc-700 dark:text-zinc-100 mb-1.5"
+              />
+            </div>
+            <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block">
+              Add Highlight Point
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. 100% Organic, 1 Year Warranty..."
+                value={newHighlight}
+                onChange={(e) => setNewHighlight(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (newHighlight.trim()) {
+                      setItemHighlights([...itemHighlights, newHighlight.trim()]);
+                      setNewHighlight("");
+                    }
+                  }
+                }}
+                className="flex-1 h-8 px-2.5 bg-zinc-50 border border-zinc-200/80 rounded-md text-xs focus:bg-white focus:border-[#FF6A00]/40 outline-none transition-all dark:bg-zinc-850 dark:border-zinc-700 dark:text-zinc-100"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newHighlight.trim()) {
+                    setItemHighlights([...itemHighlights, newHighlight.trim()]);
+                    setNewHighlight("");
+                  }
+                }}
+                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md hover:bg-zinc-850 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
+              >
+                Add
+              </button>
+            </div>
+            {itemHighlights.length > 0 && (
+              <div className="space-y-1.5 pt-1 max-h-36 overflow-y-auto pr-1">
+                {itemHighlights.map((hl, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between gap-2 p-1.5 px-2.5 bg-zinc-50 border border-zinc-200/60 rounded-md dark:bg-zinc-800/40 dark:border-zinc-750 shadow-2xs"
+                  >
+                    <span className="text-[11px] font-medium text-zinc-750 dark:text-zinc-300 break-all">
+                      • {hl}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setItemHighlights(itemHighlights.filter((_, i) => i !== idx))}
+                      className="text-zinc-400 hover:text-red-500 transition-colors p-0.5 shrink-0"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <Select
             label="Dietary Preference (Veg / Non-Veg)"
             value={itemDiet}
@@ -1223,13 +1466,6 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               { value: "veg", label: "Vegetarian (Veg)" },
               { value: "nonveg", label: "Non-Vegetarian (Non-Veg)" },
             ]}
-          />
-          <Textarea
-            label="Short Description"
-            placeholder="Details about catalog items..."
-            value={itemDescription}
-            onChange={(e) => setItemDescription(e.target.value)}
-            rows={2}
           />
           <div className="pt-1 grid grid-cols-3 gap-2">
             <label className="flex items-center gap-2 p-2 bg-zinc-50 border border-zinc-200/80 rounded-md cursor-pointer hover:bg-zinc-100 transition-all dark:bg-zinc-800/50 dark:border-zinc-700 dark:hover:bg-zinc-800 shadow-sm">
@@ -1284,7 +1520,47 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               </div>
             </label>
           </div>
-          <div className="flex justify-end pt-2">
+
+          {/* Appointment Service Toggle */}
+          <div className="border border-[#FF6A00]/20 bg-[#FF6A00]/5 rounded-md p-3 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={itemIsService}
+                onChange={(e) => setItemIsService(e.target.checked)}
+                className="w-4 h-4 rounded border-zinc-300 text-[#FF6A00] focus:ring-[#FF6A00]"
+              />
+              <div>
+                <span className="text-[10px] font-bold text-[#FF6A00] block tracking-tight">Bookable Appointment Service</span>
+                <span className="text-[9px] text-zinc-500 dark:text-zinc-400 font-medium">Enable slot booking for this item in Appointment System</span>
+              </div>
+            </label>
+            {itemIsService && (
+              <div className="flex items-center gap-2 pt-1">
+                <label className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400 whitespace-nowrap">Duration (mins):</label>
+                <input
+                  type="number"
+                  min="5"
+                  step="5"
+                  value={itemServiceDuration}
+                  onChange={(e) => setItemServiceDuration(e.target.value)}
+                  className="w-20 h-7 px-2 border border-zinc-200 rounded text-xs font-bold outline-none focus:border-[#FF6A00]/40 bg-white dark:bg-zinc-900 dark:border-zinc-700"
+                />
+                <span className="text-[10px] text-zinc-400 font-medium">minutes per session</span>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center pt-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowEditItemModal(false);
+                setShowDeleteModal(true);
+              }}
+              className="text-xs font-bold text-red-500 hover:text-red-650 transition-colors cursor-pointer"
+            >
+              Delete Item
+            </button>
             <Button onClick={handleEditItem} disabled={!itemName.trim()}>
               Update Item
             </Button>

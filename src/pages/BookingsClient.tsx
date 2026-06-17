@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useShopOwner } from "@/hooks/useShopOwner";
+import { useNavigate } from "react-router-dom";
 import {
   listenBookings,
   listenTables,
@@ -118,12 +119,15 @@ function formatTime(timeStr: string) {
 }
 
 function getTodayStr() {
-  return new Date().toISOString().split("T")[0];
+  const d = new Date();
+  const offset = d.getTimezoneOffset();
+  return new Date(d.getTime() - (offset * 60 * 1000)).toISOString().split("T")[0];
 }
 
 export default function BookingsClient() {
   const { user } = useAuth();
   const { shop, loading: shopLoading } = useShopOwner();
+  const navigate = useNavigate();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [tables, setTables] = useState<any[]>([]);
@@ -418,8 +422,24 @@ export default function BookingsClient() {
     if (!newForm.customerPhone.trim()) errors.customerPhone = "Required";
     else if (!/^\d{10}$/.test(newForm.customerPhone.trim()))
       errors.customerPhone = "10-digit number";
-    if (!newForm.date) errors.date = "Required";
-    if (!newForm.time) errors.time = "Required";
+    
+    const todayStr = getTodayStr();
+    if (!newForm.date) {
+      errors.date = "Required";
+    } else if (newForm.date < todayStr) {
+      errors.date = "Cannot book in the past";
+    }
+
+    if (!newForm.time) {
+      errors.time = "Required";
+    } else if (newForm.date === todayStr && newForm.time) {
+      const now = new Date();
+      const currentTimeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+      if (newForm.time < currentTimeStr) {
+        errors.time = "Cannot book in the past";
+      }
+    }
+    
     setNewFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -515,17 +535,15 @@ export default function BookingsClient() {
                 <Button
                   variant="ghost"
                   className="text-xs h-9 font-bold"
-                  onClick={() => window.history.back()}
+                  onClick={() => navigate("/dashboard")}
                 >
-                  Go Back
+                  Back to Dashboard
                 </Button>
                 <Button
                   variant="dark"
                   icon={ArrowRight}
                   className="text-xs h-9 shadow-sm font-bold"
-                  onClick={() =>
-                    (window.location.href = `/manage?id=${shop?.id}&view=features`)
-                  }
+                  onClick={() => navigate(`/manage?shopId=${shop?.id}&view=features`)}
                 >
                   Activate · ₹399/mo
                 </Button>
@@ -1124,6 +1142,7 @@ export default function BookingsClient() {
               <input
                 type="date"
                 value={newForm.date}
+                min={getTodayStr()}
                 onChange={(e) =>
                   setNewForm((f) => ({ ...f, date: e.target.value }))
                 }

@@ -3,6 +3,22 @@ import { X, Loader2, Plus } from "lucide-react";
 import { uploadImage } from "../../lib/storage";
 import { useModal } from "../../hooks/useModal";
 
+const isVideoUrl = (url: string | null | undefined): boolean => {
+  if (!url) return false;
+  if (url.startsWith("data:")) {
+    return url.startsWith("data:video/");
+  }
+  const pathPart = url.split("?")[0].toLowerCase();
+  return (
+    pathPart.endsWith(".mp4") ||
+    pathPart.endsWith(".webm") ||
+    pathPart.endsWith(".ogg") ||
+    pathPart.endsWith(".mov") ||
+    pathPart.endsWith(".m4v") ||
+    pathPart.endsWith(".quicktime")
+  );
+};
+
 interface ImageUploadProps {
   onUpload?: (url: string | string[]) => void;
   onSelect?: (file: any) => void;
@@ -13,6 +29,7 @@ interface ImageUploadProps {
   multiple?: boolean;
   className?: string;
   helpText?: string;
+  beforeUpload?: (file: File) => boolean | Promise<boolean>;
 }
 
 const ImageUpload: React.FC<ImageUploadProps> = ({
@@ -24,7 +41,8 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   compact = false,
   multiple = false,
   className = "",
-  helpText
+  helpText,
+  beforeUpload
 }) => {
   const { showAlert } = useModal();
   const [uploading, setUploading] = useState(false);
@@ -70,6 +88,15 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
     }
 
     const file = files[0];
+
+    if (beforeUpload) {
+      const allowed = await beforeUpload(file);
+      if (!allowed) {
+        e.target.value = "";
+        return;
+      }
+    }
+
     const reader = new FileReader();
     reader.onloadend = () => setPreview(reader.result);
     reader.readAsDataURL(file);
@@ -119,11 +146,23 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
       <div className="relative group flex items-center justify-center">
         {preview ? (
           <div className={`relative ${heightClass} ${containerClass} ${className} overflow-hidden border border-black/[0.08] dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm`}>
-            <img
-              src={preview}
-              alt="Preview"
-              className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
-            />
+            {isVideoUrl(preview) ? (
+              <video
+                src={preview}
+                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
+                controls={false}
+                muted
+                loop
+                autoPlay
+                playsInline
+              />
+            ) : (
+              <img
+                src={preview}
+                alt="Preview"
+                className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
+              />
+            )}
             <button
               type="button"
               onClick={clearImage}
@@ -154,7 +193,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
             <input
               type="file"
               className="hidden"
-              accept="image/*"
+              accept="image/*,video/*"
               onChange={handleFileChange}
               disabled={uploading}
               multiple={multiple}
