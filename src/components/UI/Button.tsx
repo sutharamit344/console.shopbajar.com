@@ -34,7 +34,7 @@ const Button: React.FC<ButtonProps> = ({
     outline: 'bg-transparent border border-black/[0.08] dark:border-zinc-800 text-zinc-700 dark:text-zinc-300 hover:border-black/[0.15] dark:hover:border-zinc-700 hover:text-[#0A0A0F] dark:hover:text-zinc-100 hover:bg-black/[0.02] dark:hover:bg-white/[0.02]',
     secondary: 'bg-black/[0.04] dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-black/[0.07] dark:hover:bg-zinc-700/80 hover:text-[#0A0A0F] dark:hover:text-zinc-100',
     whatsapp: 'bg-[#25D366] text-white hover:bg-[#21BD5C] shadow-sm shadow-[#25D366]/10',
-    dark: 'bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-sm',
+    dark: 'bg-zinc-900 dark:bg-zinc-800 text-white dark:text-zinc-100 hover:bg-zinc-800 dark:hover:bg-zinc-700/80 border border-transparent dark:border-zinc-700/50 shadow-sm',
     ghost: 'bg-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-black/[0.04] dark:hover:bg-white/[0.04]',
     glass: 'bg-white/10 dark:bg-zinc-900/10 border border-white/20 dark:border-zinc-800/50 text-white dark:text-zinc-100 hover:bg-white/20 dark:hover:bg-zinc-800/20 backdrop-blur-md',
     danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm shadow-red-600/10 border-none',

@@ -32,6 +32,8 @@ import {
   Store,
   Maximize2,
   Minimize2,
+  Sun,
+  Moon,
 } from "lucide-react";
 import Button from "../UI/Button";
 import CommandPalette from "../UI/CommandPalette";
@@ -62,6 +64,26 @@ export default function DashboardLayout() {
 
   // Mobile drawer state
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Theme state
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    }
+    return "light";
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    if (nextTheme === "dark") {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  };
 
   // Fullscreen state detection
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -534,6 +556,16 @@ export default function DashboardLayout() {
                   {isFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
                 </button>
 
+                {/* Dark Mode Theme Toggle Button */}
+                <button
+                  type="button"
+                  onClick={toggleTheme}
+                  className="flex items-center justify-center w-7.5 h-7.5 bg-zinc-50 hover:bg-zinc-100 dark:bg-zinc-800/40 dark:hover:bg-zinc-800 rounded-md border border-zinc-200/55 dark:border-zinc-800 text-zinc-555 hover:text-[#FF6A00] dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs"
+                  title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+                >
+                  {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+                </button>
+
                 <div className="relative" ref={userMenuRef}>
                   <button
                     onClick={() => setIsUserMenuOpen((prev) => !prev)}
@@ -732,29 +764,39 @@ export default function DashboardLayout() {
 
           {/* Drawer Footer */}
           <div className="p-3 border-t border-zinc-100 dark:border-zinc-850 space-y-2">
-            <div className="py-2 px-3 flex items-center gap-2 rounded-md bg-zinc-50 dark:bg-zinc-800/50">
-              <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-350">
-                {user?.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt="avatar"
-                    className="w-full h-full object-cover"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
+            <div className="py-2 px-3 flex items-center justify-between rounded-md bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-full shrink-0 overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-650 dark:text-zinc-350">
+                  {user?.photoURL ? (
+                    <img
+                      src={user.photoURL}
+                      alt="avatar"
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span>{user?.email?.charAt(0).toUpperCase() || "M"}</span>
+                  )}
+                </div>
+                {user && (
+                  <div className="min-w-0 text-[10px] font-medium leading-none">
+                    <p className="font-bold text-zinc-700 dark:text-zinc-300 truncate mb-0.5">
+                      {user.displayName || "Merchant"}
+                    </p>
+                    <p className="text-zinc-400 dark:text-zinc-500 truncate">
+                      {user.email}
+                    </p>
+                  </div>
                 )}
               </div>
-              {user && (
-                <div className="min-w-0 text-[10px] font-medium leading-none">
-                  <p className="font-bold text-zinc-700 dark:text-zinc-300 truncate mb-0.5">
-                    {user.displayName || "Merchant"}
-                  </p>
-                  <p className="text-zinc-400 dark:text-zinc-500 truncate">
-                    {user.email}
-                  </p>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="flex items-center justify-center w-7 h-7 bg-white dark:bg-zinc-900 rounded-md border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-[#FF6A00] dark:text-zinc-400 dark:hover:text-white transition-all cursor-pointer shadow-3xs shrink-0"
+                title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {theme === "dark" ? <Sun size={13} /> : <Moon size={13} />}
+              </button>
             </div>
 
             <button
@@ -788,7 +830,7 @@ export default function DashboardLayout() {
               document.exitFullscreen().catch((err) => console.log(err));
             }
           }}
-          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-950 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-800/90 hover:bg-zinc-950 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 backdrop-blur-md border border-zinc-800 dark:border-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
           title="Exit Fullscreen"
         >
           <Minimize2 size={16} />

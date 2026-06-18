@@ -170,7 +170,7 @@ const Overview: React.FC<OverviewProps> = ({
                       }`}
                     style={{ height: `${heightPct}%` }}
                   />
-                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-[9px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-sm dark:bg-zinc-100 dark:text-zinc-900 font-bold">
+                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-[9px] px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-10 shadow-sm dark:bg-zinc-800 dark:text-zinc-100 border border-transparent dark:border-zinc-700 font-bold">
                     {s.views} view{s.views !== 1 ? "s" : ""}
                   </div>
                 </div>

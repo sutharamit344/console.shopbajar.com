@@ -887,7 +887,7 @@ export default function WaiterClient() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 py-2.5 sm:py-2 px-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex flex-col sm:flex-row items-center justify-center gap-1.5 leading-none ${
                   isActive
-                    ? "bg-[#0A0A0F] text-white shadow-xs dark:bg-zinc-100 dark:text-zinc-955"
+                    ? "bg-[#0A0A0F] text-white shadow-xs dark:bg-zinc-800 dark:text-zinc-100"
                     : "text-zinc-455 hover:text-zinc-650 dark:text-zinc-500 dark:hover:text-zinc-300"
                 }`}
               >
@@ -1234,7 +1234,7 @@ export default function WaiterClient() {
                       onClick={() => setSelectedSessionId(sess.id)}
                       className={`px-3 py-1.5 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
                         isActive
-                          ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-955"
+                          ? "bg-[#0A0A0F] text-white dark:bg-zinc-800 dark:text-zinc-100"
                           : "bg-zinc-50 dark:bg-zinc-900 border border-black/[0.04] dark:border-zinc-800 text-zinc-550 dark:text-zinc-450 hover:bg-zinc-100 dark:hover:bg-zinc-800"
                       }`}
                     >
@@ -1410,7 +1410,7 @@ export default function WaiterClient() {
                                 onClick={() => setPaymentMethod(method)}
                                 className={`flex-1 rounded border text-[10px] font-black transition-all cursor-pointer ${
                                   paymentMethod === method
-                                    ? "bg-[#0A0A0F] text-white border-transparent dark:bg-zinc-100 dark:text-zinc-955"
+                                    ? "bg-[#0A0A0F] text-white border-transparent dark:bg-zinc-800 dark:text-zinc-100"
                                     : "bg-white dark:bg-zinc-800 border-black/[0.08] dark:border-zinc-700 text-zinc-550 dark:text-zinc-455 hover:bg-zinc-50 dark:hover:bg-zinc-750"
                                 }`}
                               >
@@ -1588,7 +1588,7 @@ export default function WaiterClient() {
               document.exitFullscreen().catch((err) => console.log(err));
             }
           }}
-          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-800/90 hover:bg-zinc-950 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 backdrop-blur-md border border-zinc-800 dark:border-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
           title="Exit Fullscreen"
         >
           <Minimize2 size={16} />

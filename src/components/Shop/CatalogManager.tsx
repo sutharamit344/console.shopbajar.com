@@ -609,7 +609,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               onClick={() => setCatalogView("grid")}
               title="Grid View"
               className={`h-full w-8 flex items-center justify-center transition-all cursor-pointer ${catalogView === "grid"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 }`}
             >
@@ -619,7 +619,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
               onClick={() => setCatalogView("list")}
               title="List View"
               className={`h-full w-8 flex items-center justify-center transition-all cursor-pointer ${catalogView === "list"
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100"
                 : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
                 }`}
             >
@@ -637,7 +637,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
 
           <button
             onClick={() => setShowCategoryModal(true)}
-            className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md flex items-center gap-1 hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95 transition-all whitespace-nowrap shadow-sm cursor-pointer"
+            className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 text-xs font-bold rounded-md flex items-center gap-1 hover:bg-zinc-800 dark:hover:bg-zinc-700 active:scale-95 transition-all whitespace-nowrap shadow-sm cursor-pointer"
           >
             <Plus size={12} /> Add Category
           </button>
@@ -691,7 +691,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                         setItemFeatured(false);
                         setShowItemModal(true);
                       }}
-                      className="h-7 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-[10px] font-bold rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-200 active:scale-95 transition-all shadow-sm cursor-pointer"
+                      className="h-7 px-3 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 text-[10px] font-bold rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-700 active:scale-95 transition-all shadow-sm cursor-pointer"
                     >
                       + Add Item
                     </button>
@@ -869,7 +869,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                   resetItemForm();
                   setShowCategoryModal(true);
                 }}
-                className="h-9 px-5 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md shadow-sm active:scale-95 transition-all cursor-pointer hover:bg-zinc-800 dark:hover:bg-zinc-200"
+                className="h-9 px-5 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 text-xs font-bold rounded-md shadow-sm active:scale-95 transition-all cursor-pointer hover:bg-zinc-800 dark:hover:bg-zinc-700"
               >
                 Add First Category
               </button>
@@ -1189,7 +1189,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                     setNewHighlight("");
                   }
                 }}
-                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md hover:bg-zinc-850 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
+                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 text-xs font-bold rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-700 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
               >
                 Add
               </button>
@@ -1430,7 +1430,7 @@ const CatalogManager: React.FC<CatalogManagerProps> = ({
                     setNewHighlight("");
                   }
                 }}
-                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 text-xs font-bold rounded-md hover:bg-zinc-850 dark:hover:bg-zinc-200 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
+                className="h-8 px-3 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 text-xs font-bold rounded-md hover:bg-zinc-800 dark:hover:bg-zinc-700 active:scale-95 transition-all cursor-pointer shadow-sm flex items-center justify-center whitespace-nowrap"
               >
                 Add
               </button>

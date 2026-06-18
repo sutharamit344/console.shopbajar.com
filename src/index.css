@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@custom-variant dark (&.dark, .dark &);
+
+@theme {
+  /* Custom intermediate Zinc shades used in the codebase */
+  --color-zinc-150: #ececef;
+  --color-zinc-250: #dadade;
+  --color-zinc-350: #bcbcc2;
+  --color-zinc-450: #a2a2ab;
+  --color-zinc-455: #93939c;
+  --color-zinc-550: #7e7e88;
+  --color-zinc-555: #666670;
+  --color-zinc-805: #1c1c1f;
+  --color-zinc-850: #161619;
+  --color-zinc-955: #050507;
+}

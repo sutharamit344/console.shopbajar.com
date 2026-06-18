@@ -122,7 +122,7 @@ export default function PortalBillingView() {
               document.exitFullscreen().catch((err) => console.log(err));
             }
           }}
-          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-800/90 hover:bg-zinc-950 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 backdrop-blur-md border border-zinc-800 dark:border-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
           title="Exit Fullscreen"
         >
           <Minimize2 size={16} />

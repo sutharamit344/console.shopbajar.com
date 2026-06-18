@@ -680,7 +680,7 @@ export default function TablesClient() {
                   onClick={() => setViewMode("map")}
                   className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
                     viewMode === "map"
-                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
+                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                       : "text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
                   }`}
                   title="Seating Floor Map"
@@ -692,7 +692,7 @@ export default function TablesClient() {
                   onClick={() => setViewMode("grid")}
                   className={`h-6.5 px-2 rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer ${
                     viewMode === "grid"
-                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-100 dark:text-zinc-950 shadow-2xs"
+                      ? "bg-[#0A0A0F] text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                       : "text-[#0A0A0F]/50 dark:text-[#0A0A0F]/50 dark:text-zinc-400 hover:text-[#0A0A0F] dark:hover:text-zinc-200"
                   }`}
                   title="Cards Grid"
@@ -832,7 +832,7 @@ export default function TablesClient() {
                       onClick={() => setGridCols(c)}
                       className={`flex-1 h-7.5 rounded-md font-bold text-xs transition-all cursor-pointer flex items-center justify-center ${
                         gridCols === c
-                          ? "bg-[#0A0A0F] dark:bg-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
+                          ? "bg-[#0A0A0F] dark:bg-zinc-800 text-white dark:text-zinc-100 shadow-2xs"
                           : "text-zinc-400 dark:text-zinc-500 hover:text-[#0A0A0F] dark:hover:text-zinc-300"
                       }`}
                     >
@@ -913,7 +913,7 @@ export default function TablesClient() {
                       onClick={() => setAddForm({ ...addForm, shape: "round" })}
                       className={`flex-1 h-7.5 rounded-md border text-[11px] font-bold transition-all cursor-pointer ${
                         addForm.shape === "round"
-                          ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
+                          ? "bg-[#0A0A0F] dark:bg-zinc-800 border-[#0A0A0F] dark:border-zinc-700 text-white dark:text-zinc-100 shadow-2xs"
                           : "bg-zinc-50 dark:bg-zinc-955 border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20 dark:hover:border-zinc-700"
                       }`}
                     >
@@ -926,7 +926,7 @@ export default function TablesClient() {
                       }
                       className={`flex-1 h-7.5 rounded-md border text-[11px] font-bold transition-all cursor-pointer ${
                         addForm.shape === "rectangle"
-                          ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
+                          ? "bg-[#0A0A0F] dark:bg-zinc-800 border-[#0A0A0F] dark:border-zinc-700 text-white dark:text-zinc-100 shadow-2xs"
                           : "bg-zinc-50 dark:bg-zinc-955 border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20 dark:hover:border-zinc-700"
                       }`}
                     >
@@ -1900,7 +1900,7 @@ export default function TablesClient() {
                           }
                           className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
                             editForm.shape === "round"
-                              ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-950 shadow-2xs"
+                              ? "bg-[#0A0A0F] dark:bg-zinc-800 border-[#0A0A0F] dark:border-zinc-700 text-white dark:text-zinc-100 shadow-2xs"
                               : "bg-zinc-50 dark:bg-zinc-955 border border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20"
                           }`}
                         >
@@ -1913,7 +1913,7 @@ export default function TablesClient() {
                           }
                           className={`flex-1 h-8 rounded-md border text-xs font-bold transition-all cursor-pointer ${
                             editForm.shape === "rectangle"
-                              ? "bg-[#0A0A0F] dark:bg-zinc-100 border-[#0A0A0F] dark:border-zinc-100 text-white dark:text-zinc-955 shadow-2xs"
+                              ? "bg-[#0A0A0F] dark:bg-zinc-800 border-[#0A0A0F] dark:border-zinc-700 text-white dark:text-zinc-100 shadow-2xs"
                               : "bg-zinc-50 dark:bg-zinc-955 border border-black/[0.06] dark:border-zinc-800 text-[#0A0A0F]/65 dark:text-zinc-400 hover:border-black/20"
                           }`}
                         >
@@ -2487,7 +2487,7 @@ export default function TablesClient() {
               document.exitFullscreen().catch((err) => console.log(err));
             }
           }}
-          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-800/90 hover:bg-zinc-950 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 backdrop-blur-md border border-zinc-800 dark:border-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
           title="Exit Fullscreen"
         >
           <Minimize2 size={16} />

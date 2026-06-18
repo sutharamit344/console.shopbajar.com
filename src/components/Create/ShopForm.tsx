@@ -670,7 +670,7 @@ const ShopForm: React.FC<ShopFormProps> = ({
                 className={`w-9 h-9 rounded-md flex items-center justify-center font-bold text-xs transition-all duration-500 ${currentStep > i + 1
                   ? "bg-[#FF6A00] text-white"
                   : currentStep === i + 1
-                    ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-lg scale-110"
+                    ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-lg scale-110"
                     : "bg-white text-zinc-400 border border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-500"
                   }`}
               >
@@ -870,7 +870,7 @@ const ShopForm: React.FC<ShopFormProps> = ({
                   <button
                     type="button"
                     onClick={() => handleMapSearch()}
-                    className="h-9 px-4 bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-md font-bold text-xs shadow-lg hover:bg-[#FF6A00] dark:hover:bg-[#FF6A00] dark:hover:text-white transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
+                    className="h-9 px-4 bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 rounded-md font-bold text-xs shadow-lg hover:bg-[#FF6A00] dark:hover:bg-[#FF6A00] dark:hover:text-white transition-all active:scale-95 flex items-center gap-2 cursor-pointer"
                   >
                     Find
                   </button>
@@ -1108,16 +1108,16 @@ const ShopForm: React.FC<ShopFormProps> = ({
                   </div>
                 </div>
 
-                <div className="p-4 bg-zinc-900 dark:bg-zinc-100 rounded-md space-y-3 shadow-sm flex flex-col justify-center">
+                <div className="p-4 bg-zinc-900 dark:bg-zinc-850 rounded-md space-y-3 shadow-sm flex flex-col justify-center">
                   <div className="flex items-center gap-2 text-[11px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
                     <Eye size={12} />
                     Marketplace Discovery
                   </div>
                   <div className="space-y-1">
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-650">
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-400">
                       Your shop will appear under:
                     </p>
-                    <p className="text-xs font-bold text-white dark:text-zinc-900 flex items-center gap-2">
+                    <p className="text-xs font-bold text-white dark:text-zinc-100 flex items-center gap-2">
                       <Sparkles size={14} className="text-[#FF6A00]" />
                       {formData.category || "Select Category"}s in{" "}
                       {formData.area || "Select Area"}

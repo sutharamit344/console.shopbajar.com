@@ -466,12 +466,12 @@ export default function KitchenClient() {
               onClick={() => setStatusFilter("all")}
               className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 statusFilter === "all"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
               }`}
             >
               <span>All Active</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "all" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "all" ? "bg-white/20 text-white dark:bg-white/10 dark:text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
                 {allCount}
               </span>
             </button>
@@ -480,12 +480,12 @@ export default function KitchenClient() {
               onClick={() => setStatusFilter("new")}
               className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 statusFilter === "new"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
               }`}
             >
               <span>New</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "new" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "new" ? "bg-white/20 text-white dark:bg-white/10 dark:text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
                 {newCount}
               </span>
             </button>
@@ -494,12 +494,12 @@ export default function KitchenClient() {
               onClick={() => setStatusFilter("ready")}
               className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 statusFilter === "ready"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
               }`}
             >
               <span>Ready</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "ready" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "ready" ? "bg-white/20 text-white dark:bg-white/10 dark:text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
                 {readyCount}
               </span>
             </button>
@@ -508,12 +508,12 @@ export default function KitchenClient() {
               onClick={() => setStatusFilter("served")}
               className={`flex-1 py-1.5 px-3 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 statusFilter === "served"
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-905 shadow-2xs"
+                  ? "bg-zinc-900 text-white dark:bg-zinc-800 dark:text-zinc-100 shadow-2xs"
                   : "text-zinc-550 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 hover:bg-zinc-50/50 dark:hover:bg-zinc-800/40"
               }`}
             >
               <span>Served</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "served" ? "bg-white/20 text-white dark:bg-zinc-800/80 dark:text-zinc-300" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
+              <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-extrabold ${statusFilter === "served" ? "bg-white/20 text-white dark:bg-white/10 dark:text-white" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-500"}`}>
                 {servedCount}
               </span>
             </button>
@@ -913,7 +913,7 @@ export default function KitchenClient() {
                                   <button
                                     onClick={() => handleNextStatus(order)}
                                     disabled={isUpdating}
-                                    className="w-full h-10 sm:h-8 rounded-md bg-[#0A0A0F] dark:bg-zinc-100 hover:bg-[#0A0A0F]/80 dark:hover:bg-zinc-200 text-white dark:text-zinc-950 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                                    className="w-full h-10 sm:h-8 rounded-md bg-[#0A0A0F] dark:bg-zinc-800 hover:bg-[#0A0A0F]/80 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-sm"
                                   >
                                     {isUpdating ? (
                                       <Loader2
@@ -1065,7 +1065,7 @@ export default function KitchenClient() {
               document.exitFullscreen().catch((err) => console.log(err));
             }
           }}
-          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-100/90 hover:bg-zinc-950 dark:hover:bg-white text-white dark:text-zinc-955 backdrop-blur-md border border-zinc-800 dark:border-zinc-200 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
+          className="fixed bottom-6 right-6 z-[9999] w-10 h-10 rounded-full bg-zinc-900/90 dark:bg-zinc-800/90 hover:bg-zinc-950 dark:hover:bg-zinc-700 text-white dark:text-zinc-100 backdrop-blur-md border border-zinc-800 dark:border-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-90 hover:scale-105 cursor-pointer animate-in fade-in duration-200"
           title="Exit Fullscreen"
         >
           <Minimize2 size={16} />
