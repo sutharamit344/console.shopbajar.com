@@ -72,11 +72,12 @@ export function getBusinessStatus(shop: any) {
 
   // Show when it opens next
   if (now < open) {
-    const h = String(openH).padStart(2, "0");
+    const displayHour = openH % 12 === 0 ? 12 : openH % 12;
+    const ampm = openH >= 12 ? "PM" : "AM";
     const m = String(openM).padStart(2, "0");
     return {
       isOpen: false,
-      label: `Opens at ${h}:${m}`,
+      label: `Opens at ${displayHour}:${m} ${ampm}`,
       colorClass: "text-[#999]",
       dotClass: "bg-gray-300",
     };

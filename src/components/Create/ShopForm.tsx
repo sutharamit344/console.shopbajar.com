@@ -499,8 +499,8 @@ const ShopForm: React.FC<ShopFormProps> = ({
       }
     }
     if (currentStep === 2) {
-      if (!formData.city || !formData.phone || !formData.ownerEmail) {
-        setLocalError("City, WhatsApp number, and Owner Email are required.");
+      if (!formData.city || !formData.phone) {
+        setLocalError("City and WhatsApp number are required.");
         return;
       }
 
@@ -510,10 +510,12 @@ const ShopForm: React.FC<ShopFormProps> = ({
         return;
       }
 
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(formData.ownerEmail)) {
-        setLocalError("Please enter a valid email address.");
-        return;
+      if (formData.ownerEmail) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(formData.ownerEmail)) {
+          setLocalError("Please enter a valid email address.");
+          return;
+        }
       }
     }
     setLocalError(null);
@@ -1064,13 +1066,12 @@ const ShopForm: React.FC<ShopFormProps> = ({
                   helpText="Customers will reach out to you on this number"
                 />
                 <Input
-                  label="Owner Email Address"
+                  label="Owner Email Address (Optional)"
                   name="ownerEmail"
                   type="email"
                   value={formData.ownerEmail}
                   onChange={handleChange}
                   placeholder="owner@example.com"
-                  required
                   icon={Mail}
                   helpText="Used for business verification and updates"
                 />
